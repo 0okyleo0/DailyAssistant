@@ -20,7 +20,8 @@ function TasksView({ games, onGamesChange, settings }) {
       });
       onGamesChange();
     } catch (error) {
-      toast.error("更新失敗");
+      const detail = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "未知錯誤";
+      toast.error("更新失敗: " + detail);
       console.error(error);
     }
   };
@@ -34,7 +35,8 @@ function TasksView({ games, onGamesChange, settings }) {
       toast.success("已取消所有勾選");
       onGamesChange();
     } catch (error) {
-      toast.error("操作失敗");
+      const detail = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "未知錯誤";
+      toast.error("操作失敗: " + detail);
       console.error(error);
     } finally {
       setLoading(false);

@@ -7,25 +7,37 @@ import axios from "axios";
  * web (via FastAPI backend) and desktop (via Electron IPC).
  */
 export function setupElectronAdapter() {
-  if (typeof window === "undefined" || !window.electronAPI) return false;
+  if (typeof window === "undefined") {
+    console.log("[ElectronAdapter] window undefined, skipping");
+    return false;
+  }
+  if (!window.electronAPI) {
+    console.log("[ElectronAdapter] window.electronAPI not found - running in browser mode");
+    return false;
+  }
+
+  console.log("[ElectronAdapter] window.electronAPI found - overriding axios adapter");
+  console.log("[ElectronAdapter] electronAPI keys:", Object.keys(window.electronAPI));
 
   axios.defaults.adapter = async (config) => {
     const method = (config.method || "get").toUpperCase();
 
-    // Extract path from URL (strip base URL)
+    // Extract path from URL (strip base URL and origin if present)
     let url = config.url || "";
     if (config.baseURL && url.startsWith(config.baseURL)) {
       url = url.slice(config.baseURL.length);
     }
-    // If URL is absolute with http(s), strip origin
     try {
       if (url.startsWith("http://") || url.startsWith("https://")) {
         const u = new URL(url);
         url = u.pathname + u.search;
       }
     } catch (e) {
-      /* ignore */
+      console.warn("[ElectronAdapter] URL parse failed for:", url);
     }
+
+    // Ensure url starts with / for our route matcher
+    if (!url.startsWith("/")) url = "/" + url;
 
     // Parse body data
     let data = config.data;
@@ -37,21 +49,35 @@ export function setupElectronAdapter() {
       }
     }
 
-    const response = await window.electronAPI.request({ method, url, data });
+    console.log(`[ElectronAdapter] ${method} ${url}`, data);
 
+    let response;
+    try {
+      response = await window.electronAPI.request({ method, url, data });
+    } catch (ipcErr) {
+      console.error("[ElectronAdapter] IPC request failed:", ipcErr);
+      const err = new Error("IPC 通訊失敗: " + (ipcErr.message || String(ipcErr)));
+      err.config = config;
+      throw err;
+    }
+
+    console.log(`[ElectronAdapter] Response ${response?.status}:`, response?.data);
+
+    const status = response?.status || 200;
     const httpResponse = {
-      data: response.data,
-      status: response.status || 200,
-      statusText: response.status >= 400 ? "Error" : "OK",
+      data: response?.data,
+      status,
+      statusText: status >= 400 ? "Error" : "OK",
       headers: { "content-type": "application/json" },
       config,
       request: {},
     };
 
-    if (httpResponse.status >= 400) {
-      const error = new Error(
-        (response.data && response.data.detail) || "Request failed"
-      );
+    if (status >= 400) {
+      const detail =
+        (response?.data && (response.data.detail || response.data.error)) ||
+        `Request failed (status ${status})`;
+      const error = new Error(detail);
       error.response = httpResponse;
       error.config = config;
       throw error;

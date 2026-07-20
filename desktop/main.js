@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Notification, globalShortcut } = require('electron');
 const path = require('path');
 const dataStore = require('./data-store');
 const { launchGame } = require('./game-launcher');
@@ -41,7 +41,26 @@ function createWindow() {
     mainWindow.loadFile(indexPath);
   }
 
+  // Open DevTools by default for diagnostic purposes.
+  // Users can toggle it with F12 or Ctrl+Shift+I.
+  // If everything works fine, you can remove this line to hide DevTools by default.
+  mainWindow.webContents.openDevTools({ mode: 'detach' });
+
   mainWindow.setMenu(null);
+
+  // Enable DevTools shortcuts: F12 or Ctrl+Shift+I
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown') {
+      if (input.key === 'F12' || (input.control && input.shift && (input.key === 'I' || input.key === 'i'))) {
+        mainWindow.webContents.toggleDevTools();
+        event.preventDefault();
+      }
+      if (input.control && input.key === 'r') {
+        mainWindow.webContents.reload();
+        event.preventDefault();
+      }
+    }
+  });
 
   // Open external links in default browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -57,10 +76,15 @@ app.whenReady().then(() => {
   // Register IPC handlers
   ipcMain.handle('api-request', async (event, req) => {
     try {
-      return await handleApiRequest(req);
+      console.log(`[IPC] ${req.method} ${req.url}`);
+      const result = await handleApiRequest(req);
+      if (result.status >= 400) {
+        console.warn(`[IPC] ${req.method} ${req.url} -> ${result.status}`, result.data);
+      }
+      return result;
     } catch (err) {
-      console.error('API request error:', err);
-      return { status: 500, data: { error: err.message } };
+      console.error('[IPC] api-request error:', err);
+      return { status: 500, data: { error: err.message, stack: err.stack } };
     }
   });
 

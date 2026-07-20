@@ -51,7 +51,8 @@ function HistoryView({ games }) {
       fetchRecords();
       fetchStats();
     } catch (error) {
-      toast.error("刪除失敗");
+      const detail = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "未知錯誤";
+      toast.error("刪除失敗: " + detail);
       console.error(error);
     }
   };
@@ -73,7 +74,8 @@ function HistoryView({ games }) {
       fetchRecords();
       fetchStats();
     } catch (error) {
-      toast.error("刪除失敗");
+      const detail = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "未知錯誤";
+      toast.error("刪除失敗: " + detail);
       console.error(error);
     }
   };

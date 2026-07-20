@@ -20,6 +20,19 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
+    // Diagnostic: check Electron API availability
+    if (typeof window !== "undefined") {
+      console.log("[App] window.electronAPI:", window.electronAPI);
+      if (window.electronAPI?.request) {
+        window.electronAPI
+          .request({ method: "GET", url: "/api/" })
+          .then((r) => console.log("[App] IPC test OK:", r))
+          .catch((e) => console.error("[App] IPC test failed:", e));
+      } else {
+        console.warn("[App] Not running in Electron or electronAPI not exposed");
+      }
+    }
+
     fetchGames();
     fetchSettings();
     checkAutoReset();

@@ -48,7 +48,8 @@ function SettingsView({ settings, onSettingsChange }) {
         }
       }
     } catch (error) {
-      toast.error("儲存失敗");
+      const detail = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "未知錯誤";
+      toast.error("儲存失敗: " + detail);
       console.error(error);
     } finally {
       setSaving(false);
@@ -60,7 +61,8 @@ function SettingsView({ settings, onSettingsChange }) {
       await navigator.clipboard.writeText(generateRegFile(customProtocol));
       toast.success(".reg 內容已複製到剪貼板");
     } catch (error) {
-      toast.error("複製失敗");
+      const detail = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "未知錯誤";
+      toast.error("複製失敗: " + detail);
     }
   };
 

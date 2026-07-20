@@ -65,7 +65,8 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
       resetForm();
       onGamesChange();
     } catch (error) {
-      toast.error("操作失敗");
+      const detail = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "未知錯誤";
+      toast.error("操作失敗: " + detail);
       console.error(error);
     }
   };
@@ -87,7 +88,8 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
       toast.success("遊戲已刪除");
       onGamesChange();
     } catch (error) {
-      toast.error("刪除失敗");
+      const detail = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "未知錯誤";
+      toast.error("刪除失敗: " + detail);
       console.error(error);
     }
   };
