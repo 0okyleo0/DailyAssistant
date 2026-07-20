@@ -49,14 +49,34 @@ cd <專案資料夾>
 ### Windows
 1. 下載並執行 [MongoDB Community Server](https://www.mongodb.com/try/download/community)
 2. 安裝時勾選「Install MongoDB as a Service」（會自動啟動 MongoDB）
-3. 預設連線位址為 `mongodb://localhost:27017`
+3. **重要**: 在 "Install MongoDB Compass" 選項保持勾選（Compass 是 MongoDB 的圖形化管理工具）
+4. 預設連線位址為 `mongodb://localhost:27017`
 
 ### 確認 MongoDB 正在運行
-開啟命令提示字元執行：
-```bash
-mongosh
-```
-若能連上代表正常運行。輸入 `exit` 離開。
+
+**方法 A：檢查 Windows 服務（最簡單）**
+1. 按 `Win + R` 開啟執行視窗
+2. 輸入 `services.msc` 並按 Enter
+3. 找到 "MongoDB Server" 或 "MongoDB"
+4. 確認「狀態」為「執行中」
+
+**方法 B：使用 MongoDB Compass（圖形化工具）**
+1. 開啟 MongoDB Compass（安裝 MongoDB 時已一併安裝）
+2. 使用預設連線字串 `mongodb://localhost:27017` 點擊 Connect
+3. 若能成功連線代表 MongoDB 正常運行
+
+**方法 C：使用命令列（需另外安裝 mongosh）**
+> ⚠️ 注意：MongoDB 5.0+ 版本 `mongosh` 已獨立於伺服器，需要單獨下載
+1. 從 [MongoDB Shell 下載頁面](https://www.mongodb.com/try/download/shell) 下載 mongosh
+2. 解壓縮後將 `bin` 資料夾加入系統 PATH 環境變數
+3. 重開命令提示字元，執行 `mongosh` 測試
+
+**如果 MongoDB 服務未運行：**
+1. 在 services.msc 中右鍵點擊 MongoDB → 選擇「啟動」
+2. 或者以「系統管理員身分」開啟命令提示字元執行：
+   ```bash
+   net start MongoDB
+   ```
 
 ---
 
@@ -159,6 +179,15 @@ yarn start
 ### Q: MongoDB 無法連線
 確認 MongoDB 服務正在運行：
 - Windows: 按 `Win+R` 輸入 `services.msc`，找到 MongoDB 服務並確認狀態為「執行中」
+- 若未執行：右鍵 MongoDB 服務 → 選擇「啟動」
+- 或以系統管理員身分開啟 CMD，執行 `net start MongoDB`
+
+### Q: 提示 'mongosh' 不是內部或外部命令
+這是正常情況：
+- MongoDB 5.0+ 版本 `mongosh` 已與伺服器分開發布，安裝伺服器時不會自動安裝 mongosh
+- **您不需要 mongosh 也能使用本應用**，因為程式會透過 Python 的 motor 套件直接連線 MongoDB
+- 若想驗證 MongoDB 是否運行，建議使用 **MongoDB Compass** 圖形化工具（安裝 MongoDB 時可一併勾選安裝）
+- 或至 `services.msc` 檢查 MongoDB 服務狀態
 
 ### Q: 前端無法連上後端
 確認 `frontend/.env` 中的 `REACT_APP_BACKEND_URL` 是 `http://localhost:8001`
@@ -169,10 +198,12 @@ yarn start
 3. 重新啟動瀏覽器
 
 ### Q: 如何備份資料？
-您的所有資料儲存在 MongoDB 中，可使用 `mongodump` 指令備份：
-```bash
-mongodump --db game_tracker --out ./backup
-```
+您的所有資料儲存在 MongoDB 中：
+- **使用 MongoDB Compass**：連線後可匯出集合為 JSON
+- **使用命令列** (需先安裝 [MongoDB Database Tools](https://www.mongodb.com/try/download/database-tools))：
+  ```bash
+  mongodump --db game_tracker --out ./backup
+  ```
 
 ---
 
