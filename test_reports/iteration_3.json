@@ -1,0 +1,58 @@
+{
+  "summary": "Iteration 3 comprehensive testing after major schema change (URL -> local file path, global reset_time -> per-game reset_time). Backend: 10 pytest tests all passed covering create/update/reset-game/filter/stats endpoints. Frontend: verified per-game reset time display in sidebar and TasksView, copy-path clipboard operations (both sidebar and tasks view), edit prefill including reset_time, edit persistence, history filter dropdown, game_name column, settings view without global reset_time input, and delete flow. All functionality working correctly.",
+  "tested_scope": ["backend", "frontend", "integration"],
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Add/Edit Game Dialog", "issues": ["Radix DialogContent missing aria-describedby/Description (accessibility warning in console). Low priority."]}
+    ]
+  },
+  "passed": [
+    "Backend: POST /api/games accepts path + reset_time fields",
+    "Backend: reset_time defaults to '00:00' when omitted",
+    "Backend: PUT /api/games/{id} updates reset_time",
+    "Backend: POST /api/games/reset-game creates DailyRecord with correct completion metrics and resets tasks + last_reset_date",
+    "Backend: GET /api/daily-records?game_id=X filters correctly",
+    "Backend: GET /api/stats?game_id=X returns per-game stats",
+    "Backend: reset-game 404 for nonexistent game_id",
+    "Backend: Settings no longer contains reset_time field",
+    "Frontend: sidebar shows '{n} 個任務' + clock icon + 'HH:MM 重置' per game",
+    "Frontend: TasksView header shows '每日 HH:MM 自動重置' per game",
+    "Frontend: copy-path-{id} sidebar button copies path to clipboard",
+    "Frontend: copy-path-link-{id} button on TasksView copies path to clipboard",
+    "Frontend: Edit dialog prefills name/path/reset_time/tasks correctly",
+    "Frontend: Edited reset_time reflects in sidebar (08:15 -> 22:30)",
+    "Frontend: History game-filter Select renders with '所有遊戲' + game options",
+    "Frontend: History table has '遊戲' column with game_name",
+    "Frontend: Settings has no reset-time-input; notifications-switch works",
+    "Frontend: Delete game removes item from sidebar"
+  ],
+  "critical_code_review_comments": [
+    "Sidebar.jsx and TasksView.jsx duplicate handleCopyPath logic (~7 lines). Consider extracting to a shared util.",
+    "checkAutoReset auto-reset logic in App.js not runtime-tested (would require time mocking); logic reviewed only.",
+    "Add DialogDescription/aria-describedby to Dialogs to remove Radix accessibility warnings.",
+    "Backend reset_time is a plain string; consider Pydantic validator to enforce HH:MM regex."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (new)",
+    "/app/test_reports/iteration_3.json (new)"
+  ],
+  "action_items": [
+    "(Optional) Add DialogDescription to Add/Edit Game dialog for a11y",
+    "(Optional) Validate reset_time HH:MM format on backend"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (all UI checks passed)"},
+  "seed_data_creation": "Tests create TEST_-prefixed games and clean them up via teardown; one DailyRecord is left from reset-game test (identifiable by TEST_Game_A_Edited name).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend fully covered by /app/backend/tests/backend_test.py — reuse pytest suite. Frontend verified: per-game reset time, clipboard copy on sidebar and TasksView, history filter/column, settings without global reset. Clipboard reads worked with grant_permissions on the HTTPS preview URL. checkAutoReset scheduler logic in App.js was NOT time-simulated."
+}

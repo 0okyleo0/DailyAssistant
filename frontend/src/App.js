@@ -49,40 +49,37 @@ function App() {
 
   const checkAutoReset = async () => {
     try {
-      const settingsRes = await axios.get(`${API}/settings`);
-      const currentSettings = settingsRes.data;
-
-      if (!currentSettings.reset_time) return;
+      const gamesRes = await axios.get(`${API}/games`);
+      const currentGames = gamesRes.data;
 
       const now = new Date();
       const today = now.toISOString().split('T')[0];
-      const [hours, minutes] = currentSettings.reset_time.split(':');
-      const resetTime = new Date();
-      resetTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
-      // Check if we've passed the reset time and haven't reset today
-      if (now >= resetTime && currentSettings.last_reset_date !== today) {
-        // Save current state before reset
-        await axios.post(`${API}/daily-records/save`);
-        
-        // Uncheck all tasks
-        await axios.post(`${API}/games/uncheck-all`);
-        
-        // Update settings with new reset date
-        await axios.put(`${API}/settings`, { last_reset_date: today });
-        
-        fetchGames();
-        fetchSettings();
-        
-        if (currentSettings.notifications_enabled && "Notification" in window && Notification.permission === "granted") {
-          new Notification("遊戲任務已重置", {
-            body: "每日任務已自動重置,祝您遊戲愉快!",
-            icon: "/favicon.ico"
-          });
+      for (const game of currentGames) {
+        if (!game.reset_time) continue;
+
+        const [hours, minutes] = game.reset_time.split(':');
+        const resetTime = new Date();
+        resetTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+        // Check if we've passed the reset time and haven't reset today
+        if (now >= resetTime && game.last_reset_date !== today) {
+          // Reset this game
+          await axios.post(`${API}/games/reset-game`, { game_id: game.id });
+          
+          if (settings?.notifications_enabled && "Notification" in window && Notification.permission === "granted") {
+            new Notification(`${game.name} 已重置`, {
+              body: "每日任務已自動重置",
+              icon: "/favicon.ico"
+            });
+          }
+          
+          toast.success(`${game.name} 已自動重置`);
         }
-        
-        toast.success("每日任務已自動重置");
       }
+
+      // Refresh games after any resets
+      fetchGames();
     } catch (e) {
       console.error("Error checking auto-reset:", e);
     }
@@ -143,7 +140,7 @@ function App() {
               </TabsContent>
 
               <TabsContent value="history" className="mt-0">
-                <HistoryView />
+                <HistoryView games={games} />
               </TabsContent>
 
               <TabsContent value="settings" className="mt-0">

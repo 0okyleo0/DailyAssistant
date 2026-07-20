@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, ExternalLink, Trash2, Edit2, Menu, X } from "lucide-react";
+import { Plus, Copy, Trash2, Edit2, Menu, X, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,12 +15,14 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGame, setEditingGame] = useState(null);
   const [gameName, setGameName] = useState("");
-  const [gameUrl, setGameUrl] = useState("");
+  const [gamePath, setGamePath] = useState("");
+  const [resetTime, setResetTime] = useState("00:00");
   const [tasks, setTasks] = useState([{ id: Date.now().toString(), name: "" }]);
 
   const resetForm = () => {
     setGameName("");
-    setGameUrl("");
+    setGamePath("");
+    setResetTime("00:00");
     setTasks([{ id: Date.now().toString(), name: "" }]);
     setEditingGame(null);
   };
@@ -28,8 +30,8 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!gameName.trim() || !gameUrl.trim()) {
-      toast.error("請填寫遊戲名稱和連結");
+    if (!gameName.trim() || !gamePath.trim()) {
+      toast.error("請填寫遊戲名稱和檔案路徑");
       return;
     }
 
@@ -43,14 +45,16 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle }) {
       if (editingGame) {
         await axios.put(`${API}/games/${editingGame.id}`, {
           name: gameName,
-          url: gameUrl,
+          path: gamePath,
+          reset_time: resetTime,
           tasks: validTasks
         });
         toast.success("遊戲已更新");
       } else {
         await axios.post(`${API}/games`, {
           name: gameName,
-          url: gameUrl,
+          path: gamePath,
+          reset_time: resetTime,
           tasks: validTasks
         });
         toast.success("遊戲已新增");
@@ -68,7 +72,8 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle }) {
   const handleEdit = (game) => {
     setEditingGame(game);
     setGameName(game.name);
-    setGameUrl(game.url);
+    setGamePath(game.path);
+    setResetTime(game.reset_time || "00:00");
     setTasks(game.tasks.length > 0 ? game.tasks : [{ id: Date.now().toString(), name: "" }]);
     setDialogOpen(true);
   };
@@ -82,6 +87,16 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle }) {
       onGamesChange();
     } catch (error) {
       toast.error("刪除失敗");
+      console.error(error);
+    }
+  };
+
+  const handleCopyPath = async (path, name) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      toast.success(`${name} 路徑已複製`);
+    } catch (error) {
+      toast.error("複製失敗");
       console.error(error);
     }
   };
@@ -145,7 +160,7 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle }) {
                   新增遊戲
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-[#141414] border-[#262626] text-white" data-testid="game-dialog">
+              <DialogContent className="bg-[#141414] border-[#262626] text-white max-h-[90vh] overflow-y-auto" data-testid="game-dialog">
                 <DialogHeader>
                   <DialogTitle className="text-white">{editingGame ? "編輯遊戲" : "新增遊戲"}</DialogTitle>
                 </DialogHeader>
@@ -163,16 +178,32 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle }) {
                   </div>
                   
                   <div>
-                    <Label htmlFor="game-url" className="text-neutral-400">遊戲連結</Label>
+                    <Label htmlFor="game-path" className="text-neutral-400">遊戲檔案路徑</Label>
                     <Input
-                      id="game-url"
-                      type="url"
-                      value={gameUrl}
-                      onChange={(e) => setGameUrl(e.target.value)}
+                      id="game-path"
+                      value={gamePath}
+                      onChange={(e) => setGamePath(e.target.value)}
                       className="bg-[#0A0A0A] border-[#262626] text-white"
-                      placeholder="https://..."
-                      data-testid="game-url-input"
+                      placeholder="例如: C:\Games\game.exe"
+                      data-testid="game-path-input"
                     />
+                    <p className="text-xs text-neutral-500 mt-1">點擊複製按鈕即可複製路徑到剪貼板</p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="reset-time" className="text-neutral-400 flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      每日重置時間
+                    </Label>
+                    <Input
+                      id="reset-time"
+                      type="time"
+                      value={resetTime}
+                      onChange={(e) => setResetTime(e.target.value)}
+                      className="bg-[#0A0A0A] border-[#262626] text-white"
+                      data-testid="reset-time-input"
+                    />
+                    <p className="text-xs text-neutral-500 mt-1">到達設定時間時,此遊戲任務將自動重置</p>
                   </div>
 
                   <div>
@@ -259,12 +290,12 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle }) {
                       <h3 className="text-sm font-medium text-white truncate flex-1">{game.name}</h3>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                         <button
-                          onClick={() => window.open(game.url, '_blank', 'noopener,noreferrer')}
+                          onClick={() => handleCopyPath(game.path, game.name)}
                           className="p-1 rounded hover:bg-[#262626] text-[#00F0FF]"
-                          title="開啟遊戲"
-                          data-testid={`open-game-${game.id}`}
+                          title="複製路徑"
+                          data-testid={`copy-path-${game.id}`}
                         >
-                          <ExternalLink className="w-3 h-3" />
+                          <Copy className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => handleEdit(game)}
@@ -284,8 +315,12 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle }) {
                         </button>
                       </div>
                     </div>
-                    <div className="text-xs text-neutral-500">
-                      {game.tasks?.length || 0} 個任務
+                    <div className="text-xs text-neutral-500 space-y-0.5">
+                      <div>{game.tasks?.length || 0} 個任務</div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {game.reset_time || "00:00"} 重置
+                      </div>
                     </div>
                   </div>
                 ))

@@ -34,38 +34,41 @@ class Game(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
     name: str
-    url: str
+    path: str  # Local file path or URL
     tasks: List[Task] = []
+    reset_time: str = "00:00"  # HH:MM format for this game
+    last_reset_date: str = ""  # Last reset date for this game
     order: int = 0
 
 class GameCreate(BaseModel):
     name: str
-    url: str
+    path: str
     tasks: List[Task] = []
+    reset_time: str = "00:00"
 
 class GameUpdate(BaseModel):
     name: Optional[str] = None
-    url: Optional[str] = None
+    path: Optional[str] = None
     tasks: Optional[List[Task]] = None
+    reset_time: Optional[str] = None
+    last_reset_date: Optional[str] = None
     order: Optional[int] = None
 
 class Settings(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = "default"
-    reset_time: str = "00:00"  # HH:MM format
     notifications_enabled: bool = False
-    last_reset_date: str = ""  # ISO date string
 
 class SettingsUpdate(BaseModel):
-    reset_time: Optional[str] = None
     notifications_enabled: Optional[bool] = None
-    last_reset_date: Optional[str] = None
 
 class DailyRecord(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
     date: str  # YYYY-MM-DD format
-    games: List[Game]
+    game_id: str
+    game_name: str
+    tasks: List[Task]
     total_tasks: int
     completed_tasks: int
     completion_rate: float
@@ -74,6 +77,9 @@ class TaskToggle(BaseModel):
     game_id: str
     task_id: str
     completed: bool
+
+class GameResetRequest(BaseModel):
+    game_id: str
 
 # ===== Routes =====
 
@@ -96,6 +102,7 @@ async def create_game(game_input: GameCreate):
     game_dict = game_input.model_dump()
     game_dict["id"] = f"game_{datetime.now(timezone.utc).timestamp()}"
     game_dict["order"] = max_order + 1
+    game_dict["last_reset_date"] = ""
     
     game_obj = Game(**game_dict)
     await db.games.insert_one(game_obj.model_dump())
@@ -155,6 +162,53 @@ async def uncheck_all_tasks():
     
     return {"message": "All tasks unchecked successfully"}
 
+@api_router.post("/games/reset-game")
+async def reset_game(request: GameResetRequest):
+    """Reset a specific game and save its record"""
+    game = await db.games.find_one({"id": request.game_id}, {"_id": 0})
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    tasks = game.get("tasks", [])
+    total_tasks = len(tasks)
+    completed_tasks = sum(1 for task in tasks if task.get("completed", False))
+    completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+    
+    # Use yesterday's date for the record
+    from datetime import timedelta
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+    
+    # Save record
+    record = DailyRecord(
+        id=f"record_{game['id']}_{yesterday}",
+        date=yesterday,
+        game_id=game["id"],
+        game_name=game["name"],
+        tasks=[Task(**t) for t in tasks],
+        total_tasks=total_tasks,
+        completed_tasks=completed_tasks,
+        completion_rate=round(completion_rate, 2)
+    )
+    
+    await db.daily_records.update_one(
+        {"id": record.id},
+        {"$set": record.model_dump()},
+        upsert=True
+    )
+    
+    # Reset tasks
+    for task in tasks:
+        task["completed"] = False
+    
+    # Update game with reset tasks and last reset date
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    await db.games.update_one(
+        {"id": game["id"]},
+        {"$set": {"tasks": tasks, "last_reset_date": today}}
+    )
+    
+    return {"message": "Game reset successfully", "record": record.model_dump()}
+
 # Settings endpoints
 @api_router.get("/settings", response_model=Settings)
 async def get_settings():
@@ -163,9 +217,7 @@ async def get_settings():
         # Create default settings
         default_settings = Settings(
             id="default",
-            reset_time="00:00",
-            notifications_enabled=False,
-            last_reset_date=""
+            notifications_enabled=False
         )
         await db.settings.insert_one(default_settings.model_dump())
         return default_settings
@@ -189,53 +241,10 @@ async def update_settings(settings_update: SettingsUpdate):
     return Settings(**updated)
 
 # Daily records endpoints
-@api_router.post("/daily-records/save")
-async def save_daily_record():
-    # Get current games state
-    games = await db.games.find({}, {"_id": 0}).to_list(1000)
-    
-    total_tasks = 0
-    completed_tasks = 0
-    
-    for game in games:
-        tasks = game.get("tasks", [])
-        total_tasks += len(tasks)
-        completed_tasks += sum(1 for task in tasks if task.get("completed", False))
-    
-    completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
-    
-    # Use yesterday's date for the record
-    from datetime import timedelta
-    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
-    
-    record = DailyRecord(
-        id=f"record_{yesterday}",
-        date=yesterday,
-        games=[Game(**game) for game in games],
-        total_tasks=total_tasks,
-        completed_tasks=completed_tasks,
-        completion_rate=round(completion_rate, 2)
-    )
-    
-    # Upsert the record
-    await db.daily_records.update_one(
-        {"id": record.id},
-        {"$set": record.model_dump()},
-        upsert=True
-    )
-    
-    # Update last reset date in settings
-    await db.settings.update_one(
-        {"id": "default"},
-        {"$set": {"last_reset_date": datetime.now(timezone.utc).strftime("%Y-%m-%d")}},
-        upsert=True
-    )
-    
-    return {"message": "Daily record saved successfully", "record": record.model_dump()}
-
 @api_router.get("/daily-records", response_model=List[DailyRecord])
-async def get_daily_records(limit: int = 30):
-    records = await db.daily_records.find({}, {"_id": 0}).sort("date", -1).limit(limit).to_list(limit)
+async def get_daily_records(limit: int = 100, game_id: Optional[str] = None):
+    query = {"game_id": game_id} if game_id else {}
+    records = await db.daily_records.find(query, {"_id": 0}).sort("date", -1).limit(limit).to_list(limit)
     return records
 
 @api_router.delete("/daily-records/{record_id}")
@@ -251,9 +260,10 @@ async def bulk_delete_records(record_ids: List[str]):
     return {"message": f"{result.deleted_count} records deleted successfully"}
 
 @api_router.get("/stats")
-async def get_stats():
-    # Get records for last 7 days and last 30 days
-    all_records = await db.daily_records.find({}, {"_id": 0}).sort("date", -1).to_list(1000)
+async def get_stats(game_id: Optional[str] = None):
+    # Get records for specific game or all games
+    query = {"game_id": game_id} if game_id else {}
+    all_records = await db.daily_records.find(query, {"_id": 0}).sort("date", -1).to_list(1000)
     
     from datetime import timedelta
     today = datetime.now(timezone.utc).date()

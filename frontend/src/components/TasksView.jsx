@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink, CheckCircle2, Circle } from "lucide-react";
+import { Copy, CheckCircle2, Circle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import axios from "axios";
@@ -37,6 +37,16 @@ function TasksView({ games, onGamesChange }) {
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCopyPath = async (path, name) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      toast.success(`${name} 路徑已複製到剪貼板`);
+    } catch (error) {
+      toast.error("複製失敗");
+      console.error(error);
     }
   };
 
@@ -92,14 +102,20 @@ function TasksView({ games, onGamesChange }) {
               data-testid={`task-game-${game.id}`}
             >
               <div className="p-4 border-b border-[#262626] flex items-center justify-between">
-                <h3 className="text-xl font-medium text-neutral-200">{game.name}</h3>
+                <div>
+                  <h3 className="text-xl font-medium text-neutral-200">{game.name}</h3>
+                  <div className="flex items-center gap-2 mt-1 text-xs text-neutral-500">
+                    <Clock className="w-3 h-3" />
+                    <span>每日 {game.reset_time || "00:00"} 自動重置</span>
+                  </div>
+                </div>
                 <button
-                  onClick={() => window.open(game.url, '_blank', 'noopener,noreferrer')}
+                  onClick={() => handleCopyPath(game.path, game.name)}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#0A0A0A] border border-[#262626] hover:border-[#00F0FF] text-[#00F0FF] text-sm transition-colors duration-200"
-                  data-testid={`open-game-link-${game.id}`}
+                  data-testid={`copy-path-link-${game.id}`}
                 >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>開啟遊戲</span>
+                  <Copy className="w-4 h-4" />
+                  <span>複製路徑</span>
                 </button>
               </div>
               

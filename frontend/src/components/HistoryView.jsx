@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Trash2, Calendar } from "lucide-react";
+import { Trash2, Calendar, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import axios from "axios";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -10,19 +11,21 @@ import { zhCN } from "date-fns/locale";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-function HistoryView() {
+function HistoryView({ games }) {
   const [records, setRecords] = useState([]);
   const [stats, setStats] = useState(null);
   const [selectedRecords, setSelectedRecords] = useState([]);
+  const [filterGameId, setFilterGameId] = useState("all");
 
   useEffect(() => {
     fetchRecords();
     fetchStats();
-  }, []);
+  }, [filterGameId]);
 
   const fetchRecords = async () => {
     try {
-      const response = await axios.get(`${API}/daily-records?limit=30`);
+      const gameParam = filterGameId !== "all" ? `?game_id=${filterGameId}` : "?limit=100";
+      const response = await axios.get(`${API}/daily-records${gameParam}`);
       setRecords(response.data);
     } catch (error) {
       console.error("Error fetching records:", error);
@@ -31,7 +34,8 @@ function HistoryView() {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get(`${API}/stats`);
+      const gameParam = filterGameId !== "all" ? `?game_id=${filterGameId}` : "";
+      const response = await axios.get(`${API}/stats${gameParam}`);
       setStats(response.data);
     } catch (error) {
       console.error("Error fetching stats:", error);
@@ -87,7 +91,8 @@ function HistoryView() {
     date: format(new Date(record.date), 'MM/dd', { locale: zhCN }),
     完成率: record.completion_rate,
     已完成: record.completed_tasks,
-    總任務: record.total_tasks
+    總任務: record.total_tasks,
+    遊戲: record.game_name
   }));
 
   const monthlyData = records.slice(0, 30).reverse().map(record => ({
@@ -97,6 +102,24 @@ function HistoryView() {
 
   return (
     <div className="space-y-6" data-testid="history-view">
+      {/* Filter and Stats */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-neutral-400" />
+          <Select value={filterGameId} onValueChange={setFilterGameId}>
+            <SelectTrigger className="w-[200px] bg-[#141414] border-[#262626] text-white" data-testid="game-filter">
+              <SelectValue placeholder="選擇遊戲" />
+            </SelectTrigger>
+            <SelectContent className="bg-[#141414] border-[#262626] text-white">
+              <SelectItem value="all">所有遊戲</SelectItem>
+              {games.map(game => (
+                <SelectItem key={game.id} value={game.id}>{game.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       {/* Stats Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-4 rounded-lg bg-[#141414] border border-[#262626]" data-testid="total-records-stat">
@@ -192,7 +215,7 @@ function HistoryView() {
                   <th className="pb-3 text-xs font-bold tracking-[0.2em] uppercase text-neutral-500">
                     <input
                       type="checkbox"
-                      checked={selectedRecords.length === records.length}
+                      checked={selectedRecords.length === records.length && records.length > 0}
                       onChange={(e) => {
                         if (e.target.checked) {
                           setSelectedRecords(records.map(r => r.id));
@@ -205,6 +228,7 @@ function HistoryView() {
                     />
                   </th>
                   <th className="pb-3 text-xs font-bold tracking-[0.2em] uppercase text-neutral-500">日期</th>
+                  <th className="pb-3 text-xs font-bold tracking-[0.2em] uppercase text-neutral-500">遊戲</th>
                   <th className="pb-3 text-xs font-bold tracking-[0.2em] uppercase text-neutral-500">已完成</th>
                   <th className="pb-3 text-xs font-bold tracking-[0.2em] uppercase text-neutral-500">總任務</th>
                   <th className="pb-3 text-xs font-bold tracking-[0.2em] uppercase text-neutral-500">完成率</th>
@@ -230,6 +254,7 @@ function HistoryView() {
                     <td className="py-3 text-neutral-200">
                       {format(new Date(record.date), 'yyyy/MM/dd (E)', { locale: zhCN })}
                     </td>
+                    <td className="py-3 text-neutral-300 font-medium">{record.game_name}</td>
                     <td className="py-3 text-[#39FF14] font-medium">{record.completed_tasks}</td>
                     <td className="py-3 text-neutral-400">{record.total_tasks}</td>
                     <td className="py-3">
