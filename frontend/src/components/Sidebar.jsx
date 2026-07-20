@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Copy, Trash2, Edit2, Menu, X, Clock } from "lucide-react";
+import { Plus, Copy, Trash2, Edit2, Menu, X, Clock, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,11 +7,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import axios from "axios";
+import { launchGame, copyGamePath } from "@/utils/launcher";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-function Sidebar({ games, onGamesChange, isOpen, onToggle }) {
+function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGame, setEditingGame] = useState(null);
   const [gameName, setGameName] = useState("");
@@ -92,13 +93,11 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle }) {
   };
 
   const handleCopyPath = async (path, name) => {
-    try {
-      await navigator.clipboard.writeText(path);
-      toast.success(`${name} 路徑已複製`);
-    } catch (error) {
-      toast.error("複製失敗");
-      console.error(error);
-    }
+    await copyGamePath(path, name);
+  };
+
+  const handleLaunch = (path, name) => {
+    launchGame(path, name, settings?.custom_protocol || "gamelauncher");
   };
 
   const addTask = () => {
@@ -289,6 +288,14 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle }) {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <h3 className="text-sm font-medium text-white truncate flex-1">{game.name}</h3>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <button
+                          onClick={() => handleLaunch(game.path, game.name)}
+                          className="p-1 rounded hover:bg-[#262626] text-[#39FF14]"
+                          title="啟動遊戲"
+                          data-testid={`launch-game-${game.id}`}
+                        >
+                          <Rocket className="w-3 h-3" />
+                        </button>
                         <button
                           onClick={() => handleCopyPath(game.path, game.name)}
                           className="p-1 rounded hover:bg-[#262626] text-[#00F0FF]"

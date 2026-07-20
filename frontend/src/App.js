@@ -106,6 +106,7 @@ function App() {
           onGamesChange={fetchGames}
           isOpen={sidebarOpen}
           onToggle={() => setSidebarOpen(!sidebarOpen)}
+          settings={settings}
         />
         
         <main className="flex-1 p-6 md:p-12">
@@ -136,7 +137,7 @@ function App() {
               </TabsList>
 
               <TabsContent value="tasks" className="mt-0">
-                <TasksView games={games} onGamesChange={fetchGames} />
+                <TasksView games={games} onGamesChange={fetchGames} settings={settings} />
               </TabsContent>
 
               <TabsContent value="history" className="mt-0">

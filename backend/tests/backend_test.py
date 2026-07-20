@@ -161,6 +161,37 @@ def test_settings_notifications_only(session):
     session.put(f"{API}/settings", json={"notifications_enabled": False})
 
 
+# ==== Custom Protocol (Launch feature) ====
+def test_settings_has_custom_protocol_default(session):
+    r = session.get(f"{API}/settings")
+    assert r.status_code == 200
+    data = r.json()
+    assert "custom_protocol" in data
+    assert isinstance(data["custom_protocol"], str)
+    assert len(data["custom_protocol"]) > 0
+
+
+def test_update_custom_protocol_persists(session):
+    # save original
+    orig = session.get(f"{API}/settings").json().get("custom_protocol", "gamelauncher")
+    try:
+        r = session.put(f"{API}/settings", json={"custom_protocol": "mylauncher"})
+        assert r.status_code == 200
+        assert r.json()["custom_protocol"] == "mylauncher"
+        # verify GET
+        r2 = session.get(f"{API}/settings")
+        assert r2.json()["custom_protocol"] == "mylauncher"
+    finally:
+        session.put(f"{API}/settings", json={"custom_protocol": orig})
+
+
+def test_partial_update_does_not_clear_custom_protocol(session):
+    session.put(f"{API}/settings", json={"custom_protocol": "gamelauncher"})
+    r = session.put(f"{API}/settings", json={"notifications_enabled": False})
+    assert r.status_code == 200
+    assert r.json()["custom_protocol"] == "gamelauncher"
+
+
 def test_delete_game(session, created_game_ids):
     # delete the second game
     gid = created_game_ids[1]

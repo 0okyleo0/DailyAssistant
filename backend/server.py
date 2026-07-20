@@ -58,9 +58,11 @@ class Settings(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = "default"
     notifications_enabled: bool = False
+    custom_protocol: str = "gamelauncher"
 
 class SettingsUpdate(BaseModel):
     notifications_enabled: Optional[bool] = None
+    custom_protocol: Optional[str] = None
 
 class DailyRecord(BaseModel):
     model_config = ConfigDict(extra="ignore")

@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { Copy, CheckCircle2, Circle, Clock } from "lucide-react";
+import { Copy, CheckCircle2, Circle, Clock, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import axios from "axios";
+import { launchGame, copyGamePath } from "@/utils/launcher";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-function TasksView({ games, onGamesChange }) {
+function TasksView({ games, onGamesChange, settings }) {
   const [loading, setLoading] = useState(false);
 
   const handleToggleTask = async (gameId, taskId, completed) => {
@@ -41,13 +42,11 @@ function TasksView({ games, onGamesChange }) {
   };
 
   const handleCopyPath = async (path, name) => {
-    try {
-      await navigator.clipboard.writeText(path);
-      toast.success(`${name} 路徑已複製到剪貼板`);
-    } catch (error) {
-      toast.error("複製失敗");
-      console.error(error);
-    }
+    await copyGamePath(path, name);
+  };
+
+  const handleLaunch = (path, name) => {
+    launchGame(path, name, settings?.custom_protocol || "gamelauncher");
   };
 
   const totalTasks = games.reduce((acc, game) => acc + (game.tasks?.length || 0), 0);
@@ -101,7 +100,7 @@ function TasksView({ games, onGamesChange }) {
               className="rounded-lg bg-[#141414] border border-[#262626] overflow-hidden"
               data-testid={`task-game-${game.id}`}
             >
-              <div className="p-4 border-b border-[#262626] flex items-center justify-between">
+              <div className="p-4 border-b border-[#262626] flex items-center justify-between gap-2 flex-wrap">
                 <div>
                   <h3 className="text-xl font-medium text-neutral-200">{game.name}</h3>
                   <div className="flex items-center gap-2 mt-1 text-xs text-neutral-500">
@@ -109,14 +108,24 @@ function TasksView({ games, onGamesChange }) {
                     <span>每日 {game.reset_time || "00:00"} 自動重置</span>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleCopyPath(game.path, game.name)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#0A0A0A] border border-[#262626] hover:border-[#00F0FF] text-[#00F0FF] text-sm transition-colors duration-200"
-                  data-testid={`copy-path-link-${game.id}`}
-                >
-                  <Copy className="w-4 h-4" />
-                  <span>複製路徑</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleLaunch(game.path, game.name)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#39FF14]/10 border border-[#39FF14]/30 hover:border-[#39FF14] text-[#39FF14] text-sm transition-colors duration-200"
+                    data-testid={`launch-game-link-${game.id}`}
+                  >
+                    <Rocket className="w-4 h-4" />
+                    <span>啟動遊戲</span>
+                  </button>
+                  <button
+                    onClick={() => handleCopyPath(game.path, game.name)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#0A0A0A] border border-[#262626] hover:border-[#00F0FF] text-[#00F0FF] text-sm transition-colors duration-200"
+                    data-testid={`copy-path-link-${game.id}`}
+                  >
+                    <Copy className="w-4 h-4" />
+                    <span>複製路徑</span>
+                  </button>
+                </div>
               </div>
               
               <div className="divide-y divide-[#262626]">

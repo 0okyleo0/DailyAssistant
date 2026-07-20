@@ -1,0 +1,54 @@
+{
+  "summary": "Iteration 4: Tested new '一鍵啟動遊戲' (Windows custom protocol launcher) feature. Backend: 13/13 pytest tests passed including 3 new tests for custom_protocol field (default, update, partial-update preserve). Frontend: verified full UI flow - Settings launch section with protocol-input/download-reg-button/help-button, help-dialog content (Steam/Epic/Battle.net URI examples, copy-reg-button), .reg file download (filename testlauncher-protocol.reg, correct header, contains protocol name + powershell.exe), protocol validation (rejects '123invalid' with error toast, accepts 'testlauncher' with success toast), Sidebar hover buttons launch-game-{id}/copy-path-{id}, TasksView launch-game-link-{id}/copy-path-link-{id}, and launch button triggers '正在啟動' toast. All existing features remain functional.",
+  "tested_scope": ["backend", "frontend", "integration"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dialogs (Add Game, Help)", "issues": ["Radix DialogContent still missing Description/aria-describedby (a11y warning). Low priority - carried over from iter 3."]}
+    ]
+  },
+  "passed": [
+    "GET /api/settings returns custom_protocol field with default value",
+    "PUT /api/settings updates custom_protocol and persists via GET",
+    "PUT /api/settings partial update (only notifications_enabled) does NOT clear custom_protocol",
+    "Settings page shows '一鍵啟動設定' block with Rocket icon",
+    "protocol-input, download-reg-button, help-button all present and visible",
+    "Invalid protocol '123invalid' triggers validation error toast (needs letter start)",
+    "Valid protocol 'testlauncher' saves successfully with '設定已儲存' toast",
+    "help-dialog opens and contains steam://, com.epicgames.launcher://, battlenet:// examples",
+    "help-dialog dynamically displays the current protocol name",
+    "copy-reg-button visible inside help-dialog",
+    "download-reg-button downloads '{protocol}-protocol.reg' with correct Windows Registry header, protocol name, and PowerShell command",
+    "Sidebar game item hover shows launch-game-{id} (green Rocket) and copy-path-{id} (cyan Copy) buttons",
+    "TasksView shows launch-game-link-{id} '啟動遊戲' (green) and copy-path-link-{id} '複製路徑' (cyan) buttons",
+    "Clicking launch button (both sidebar and tasks view) triggers '正在啟動 {name}' success toast, no errors",
+    "Existing task toggle functionality still works"
+  ],
+  "critical_code_review_comments": [
+    "launcher.js: launchGame's try/catch will never reach the catch since iframe.src assignment + appendChild rarely throws for custom protocols in modern browsers; the '啟動失敗' toast may never fire. Consider ignoring or noting this UX gap.",
+    "SettingsView.jsx protocol validation regex /^[a-z][a-z0-9]*$/i is applied only on save, but the input is lowercased when sending to API. UI could hint that value will be lowercased.",
+    "Sidebar.jsx & TasksView.jsx duplicate handleCopyPath/handleLaunch helpers - candidates for a shared hook.",
+    "Backend Settings model has no server-side validation for custom_protocol format; client-side check is bypassable via direct API. Recommend adding Pydantic validator matching ^[a-zA-Z][a-zA-Z0-9]*$.",
+    "generateRegFile embeds the protocol name directly without escaping - protocol format validation should be enforced before generating the .reg to avoid registry-injection strings."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (added 3 custom_protocol tests)"
+  ],
+  "action_items": [
+    "(Optional) Add backend Pydantic validator for custom_protocol format",
+    "(Optional) Extract shared launcher/copy handlers used in Sidebar + TasksView",
+    "(Optional) Add DialogDescription for a11y"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (all launcher UI/flows verified)"},
+  "test_credentials": "N/A - no auth in app",
+  "seed_data_creation": "Playwright test created one TEST_LaunchGame - cleaned up after tests via DELETE /api/games. Backend pytest creates TEST_-prefixed games and cleans them up in teardown (one DailyRecord may remain).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Custom protocol launcher feature fully verified. Note: browser iframe navigation to custom URIs isn't testable end-to-end in this env (no OS registry) — verified via toast + no errors. Backend pytest suite at /app/backend/tests/backend_test.py covers all endpoints including custom_protocol. Radix Dialog a11y warning still present (harmless)."
+}
