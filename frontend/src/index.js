@@ -3,6 +3,10 @@ import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@/index.css";
 import App from "@/App";
+import { setupElectronAdapter } from "@/utils/electronAdapter";
+
+// If running in Electron, override axios to use IPC instead of HTTP
+setupElectronAdapter();
 
 const queryClient = new QueryClient({
   defaultOptions: {

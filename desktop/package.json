@@ -1,0 +1,66 @@
+{
+  "name": "game-daily-tracker-desktop",
+  "version": "1.0.0",
+  "description": "遊戲每日任務追蹤器 - 桌面版",
+  "main": "main.js",
+  "author": "Game Tracker",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build-react": "cd ../frontend && yarn build",
+    "pack": "electron-builder --dir",
+    "dist": "yarn build-react && electron-builder --win",
+    "dist:mac": "yarn build-react && electron-builder --mac",
+    "dist:linux": "yarn build-react && electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.0"
+  },
+  "build": {
+    "appId": "com.gametracker.app",
+    "productName": "遊戲每日任務追蹤器",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "data-store.js",
+      "game-launcher.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/build",
+        "to": "app-ui",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "GameTracker-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "遊戲任務追蹤器"
+    },
+    "portable": {
+      "artifactName": "GameTracker-Portable-${version}.${ext}"
+    }
+  }
+}

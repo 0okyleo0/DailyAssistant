@@ -11,6 +11,24 @@ export function launchGame(path, name, customProtocol = "gamelauncher") {
     return;
   }
 
+  // Electron desktop mode - use native IPC (no protocol needed!)
+  if (typeof window !== "undefined" && window.electronAPI?.launchGame) {
+    window.electronAPI
+      .launchGame(path)
+      .then((result) => {
+        if (result?.success) {
+          toast.success(`正在啟動 ${name}`);
+        } else {
+          toast.error(`啟動失敗: ${result?.error || "未知錯誤"}`);
+        }
+      })
+      .catch((err) => {
+        toast.error(`啟動失敗: ${err.message}`);
+      });
+    return;
+  }
+
+  // Web browser mode - use custom URI protocol
   try {
     let launchUri;
 
