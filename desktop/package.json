@@ -11,7 +11,8 @@
     "pack": "electron-builder --dir",
     "dist": "yarn build-react && electron-builder --win",
     "dist:mac": "yarn build-react && electron-builder --mac",
-    "dist:linux": "yarn build-react && electron-builder --linux"
+    "dist:linux": "yarn build-react && electron-builder --linux",
+    "gen-selfsign": "node scripts/generate-selfsigned-cert.js"
   },
   "devDependencies": {
     "electron": "^28.0.0",
@@ -20,6 +21,7 @@
   "build": {
     "appId": "com.gametracker.app",
     "productName": "遊戲每日任務追蹤器",
+    "copyright": "Copyright © 2026",
     "directories": {
       "output": "dist",
       "buildResources": "assets"
@@ -29,7 +31,8 @@
       "preload.js",
       "data-store.js",
       "game-launcher.js",
-      "package.json"
+      "package.json",
+      "assets/**/*"
     ],
     "extraResources": [
       {
@@ -39,6 +42,7 @@
       }
     ],
     "win": {
+      "icon": "assets/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -49,7 +53,14 @@
           "arch": ["x64"]
         }
       ],
-      "artifactName": "GameTracker-Setup-${version}.${ext}"
+      "artifactName": "GameTracker-Setup-${version}.${ext}",
+      "signingHashAlgorithms": ["sha256"],
+      "signAndEditExecutable": true,
+      "signDlls": false,
+      "certificateFile": "${env.CSC_LINK}",
+      "certificatePassword": "${env.CSC_KEY_PASSWORD}",
+      "publisherName": "Game Tracker",
+      "verifyUpdateCodeSignature": false
     },
     "nsis": {
       "oneClick": false,
@@ -57,10 +68,23 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "遊戲任務追蹤器"
+      "shortcutName": "遊戲任務追蹤器",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico"
     },
     "portable": {
       "artifactName": "GameTracker-Portable-${version}.${ext}"
+    },
+    "mac": {
+      "icon": "assets/icon.png",
+      "category": "public.app-category.games",
+      "target": ["dmg"]
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": ["AppImage"],
+      "category": "Game"
     }
   }
 }

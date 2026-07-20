@@ -5,6 +5,12 @@ const { launchGame } = require('./game-launcher');
 
 let mainWindow;
 
+// Set macOS dock icon (Windows uses BrowserWindow.icon, Linux uses .desktop file)
+if (process.platform === 'darwin') {
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  if (app.dock) app.dock.setIcon(iconPath);
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -12,6 +18,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0A0A0A',
+    icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

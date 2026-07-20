@@ -23,6 +23,17 @@ if %errorlevel% neq 0 (
     call npm install -g yarn
 )
 
+REM Show signing status
+if defined CSC_LINK (
+    echo [SIGNING] Certificate detected: %CSC_LINK%
+    echo           Build will be code-signed.
+) else (
+    echo [SIGNING] No CSC_LINK env var set.
+    echo           Build will be UNSIGNED (users will see SmartScreen warning).
+    echo           See CODESIGNING.md for details.
+)
+echo.
+
 echo [1/4] Installing frontend dependencies...
 cd /d %~dp0..\frontend
 call yarn install
@@ -68,6 +79,12 @@ echo    Build Complete!
 echo.
 echo    Installer:   desktop\dist\GameTracker-Setup-*.exe
 echo    Portable:    desktop\dist\GameTracker-Portable-*.exe
+if not defined CSC_LINK (
+    echo.
+    echo    NOTE: Build is UNSIGNED.
+    echo    Users will see "Unknown Publisher" warning.
+    echo    Read desktop\CODESIGNING.md to enable signing.
+)
 echo ================================================
 echo.
 pause
