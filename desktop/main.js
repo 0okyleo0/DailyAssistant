@@ -24,7 +24,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
-    title: '遊戲每日任務追蹤器',
+    title: '每日任務管理器',
     autoHideMenuBar: true,
   });
 

@@ -2,8 +2,6 @@ import { toast } from "sonner";
 
 /**
  * Launch a game via URI protocol or custom protocol.
- * - If path contains "://" (e.g., steam://, epic://), open directly.
- * - Otherwise, use the custom protocol registered in Windows (default: gamelauncher).
  */
 export function launchGame(path, name, customProtocol = "gamelauncher") {
   if (!path) {
@@ -38,7 +36,6 @@ export function launchGame(path, name, customProtocol = "gamelauncher") {
       launchUri = `${customProtocol}://${encodeURIComponent(path)}`;
     }
 
-    // Use an invisible iframe to trigger the protocol without navigating away
     const iframe = document.createElement("iframe");
     iframe.style.display = "none";
     iframe.src = launchUri;
@@ -54,18 +51,53 @@ export function launchGame(path, name, customProtocol = "gamelauncher") {
   }
 }
 
+/**
+ * Copy path with fallback for browsers where Clipboard API is restricted
+ * (e.g., iframe context, no focus, permission denied).
+ */
 export async function copyGamePath(path, name) {
+  // Try modern Clipboard API first
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(path);
+      toast.success(`${name} 路徑已複製`);
+      return;
+    } catch (err) {
+      console.warn("[Copy] Clipboard API failed, trying fallback:", err);
+    }
+  }
+
+  // Fallback using document.execCommand (works in more contexts)
   try {
-    await navigator.clipboard.writeText(path);
-    toast.success(`${name} 路徑已複製`);
-  } catch (error) {
-    console.error("Copy error:", error);
-    toast.error("複製失敗");
+    const textarea = document.createElement("textarea");
+    textarea.value = path;
+    textarea.style.position = "fixed";
+    textarea.style.top = "0";
+    textarea.style.left = "0";
+    textarea.style.opacity = "0";
+    textarea.style.pointerEvents = "none";
+    textarea.setAttribute("readonly", "");
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    const success = document.execCommand("copy");
+    document.body.removeChild(textarea);
+
+    if (success) {
+      toast.success(`${name} 路徑已複製`);
+    } else {
+      toast.error("複製失敗,請手動選取路徑");
+    }
+  } catch (err) {
+    console.error("[Copy] Fallback failed:", err);
+    toast.error("複製失敗: " + (err.message || "未知錯誤"));
   }
 }
 
 export function generateRegFile(protocol) {
-  return `Windows Registry Editor Version 5.00\r\n\r\n[HKEY_CLASSES_ROOT\\${protocol}]\r\n@="URL:${protocol} Protocol"\r\n"URL Protocol"=""\r\n\r\n[HKEY_CLASSES_ROOT\\${protocol}\\DefaultIcon]\r\n@="powershell.exe,0"\r\n\r\n[HKEY_CLASSES_ROOT\\${protocol}\\shell]\r\n\r\n[HKEY_CLASSES_ROOT\\${protocol}\\shell\\open]\r\n\r\n[HKEY_CLASSES_ROOT\\${protocol}\\shell\\open\\command]\r\n@="powershell.exe -WindowStyle Hidden -Command \\"Add-Type -AssemblyName System.Web; $uri = '%1' -replace '^${protocol}:/*',''; $p = [System.Web.HttpUtility]::UrlDecode($uri); if (Test-Path $p) { Start-Process $p } else { Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('找不到檔案: ' + $p) }\\""\r\n`;
+  // PowerShell strips protocol prefix AND trailing slash (Windows appends '/' to URIs)
+  return `Windows Registry Editor Version 5.00\r\n\r\n[HKEY_CLASSES_ROOT\\${protocol}]\r\n@="URL:${protocol} Protocol"\r\n"URL Protocol"=""\r\n\r\n[HKEY_CLASSES_ROOT\\${protocol}\\DefaultIcon]\r\n@="powershell.exe,0"\r\n\r\n[HKEY_CLASSES_ROOT\\${protocol}\\shell]\r\n\r\n[HKEY_CLASSES_ROOT\\${protocol}\\shell\\open]\r\n\r\n[HKEY_CLASSES_ROOT\\${protocol}\\shell\\open\\command]\r\n@="powershell.exe -WindowStyle Hidden -Command \\"Add-Type -AssemblyName System.Web; $uri = '%1' -replace '^${protocol}:/*','' -replace '/+$',''; $p = [System.Web.HttpUtility]::UrlDecode($uri); if (Test-Path -LiteralPath $p) { Start-Process -FilePath $p } else { Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('找不到檔案: ' + $p) }\\""\r\n`;
 }
 
 export function downloadRegFile(protocol) {

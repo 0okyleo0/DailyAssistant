@@ -7,6 +7,29 @@ let data = null;
 
 function init() {
   DATA_FILE = path.join(app.getPath('userData'), 'data.json');
+
+  // Migrate old data from previous app name if exists
+  try {
+    const userDataParent = path.dirname(app.getPath('userData'));
+    const oldPaths = [
+      path.join(userDataParent, '遊戲每日任務追蹤器', 'data.json'),
+      path.join(userDataParent, 'game-daily-tracker-desktop', 'data.json'),
+    ];
+    if (!fs.existsSync(DATA_FILE)) {
+      for (const oldPath of oldPaths) {
+        if (fs.existsSync(oldPath)) {
+          console.log(`[DataStore] Migrating data from: ${oldPath}`);
+          const dir = path.dirname(DATA_FILE);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          fs.copyFileSync(oldPath, DATA_FILE);
+          break;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[DataStore] Migration check failed:', err.message);
+  }
+
   load();
 }
 

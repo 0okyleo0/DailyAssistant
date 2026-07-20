@@ -126,7 +126,7 @@ function App() {
           <div className="max-w-7xl mx-auto">
             <header className="mb-8">
               <h1 className="text-4xl font-bold tracking-tight text-white mb-2" data-testid="main-title">
-                遊戲每日任務追蹤器
+                每日任務管理器
               </h1>
               <p className="text-base text-neutral-400">
                 管理您的遊戲日常任務,追蹤完成進度

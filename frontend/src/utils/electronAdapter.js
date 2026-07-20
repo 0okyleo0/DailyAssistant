@@ -2,42 +2,48 @@ import axios from "axios";
 
 /**
  * If running inside Electron (window.electronAPI exists),
- * override axios adapter to route all requests through IPC
- * instead of HTTP. This lets the same React code work in both
- * web (via FastAPI backend) and desktop (via Electron IPC).
+ * override axios adapter to route all requests through IPC.
  */
 export function setupElectronAdapter() {
-  if (typeof window === "undefined") {
-    console.log("[ElectronAdapter] window undefined, skipping");
-    return false;
-  }
+  if (typeof window === "undefined") return false;
   if (!window.electronAPI) {
-    console.log("[ElectronAdapter] window.electronAPI not found - running in browser mode");
+    console.log("[ElectronAdapter] Running in browser mode");
     return false;
   }
 
-  console.log("[ElectronAdapter] window.electronAPI found - overriding axios adapter");
-  console.log("[ElectronAdapter] electronAPI keys:", Object.keys(window.electronAPI));
+  console.log("[ElectronAdapter] Electron detected - overriding axios adapter");
 
   axios.defaults.adapter = async (config) => {
     const method = (config.method || "get").toUpperCase();
-
-    // Extract path from URL (strip base URL and origin if present)
     let url = config.url || "";
-    if (config.baseURL && url.startsWith(config.baseURL)) {
+
+    // Strip baseURL if present
+    if (config.baseURL && typeof config.baseURL === "string" && url.startsWith(config.baseURL)) {
       url = url.slice(config.baseURL.length);
     }
-    try {
-      if (url.startsWith("http://") || url.startsWith("https://")) {
-        const u = new URL(url);
-        url = u.pathname + u.search;
-      }
-    } catch (e) {
-      console.warn("[ElectronAdapter] URL parse failed for:", url);
+
+    // Handle "undefined/..." prefix (when REACT_APP_BACKEND_URL is undefined in build)
+    if (url.startsWith("undefined")) {
+      url = url.slice("undefined".length);
     }
 
-    // Ensure url starts with / for our route matcher
-    if (!url.startsWith("/")) url = "/" + url;
+    // Strip http(s):// origin if present
+    if (/^https?:\/\//i.test(url)) {
+      try {
+        const u = new URL(url);
+        url = u.pathname + u.search;
+      } catch (e) {
+        console.warn("[ElectronAdapter] URL parse failed:", url);
+      }
+    }
+
+    // Ensure URL starts with /api/ (find /api/ prefix as safety net)
+    const apiIdx = url.indexOf("/api/");
+    if (apiIdx > 0) {
+      url = url.slice(apiIdx);
+    } else if (!url.startsWith("/")) {
+      url = "/" + url;
+    }
 
     // Parse body data
     let data = config.data;
@@ -55,7 +61,7 @@ export function setupElectronAdapter() {
     try {
       response = await window.electronAPI.request({ method, url, data });
     } catch (ipcErr) {
-      console.error("[ElectronAdapter] IPC request failed:", ipcErr);
+      console.error("[ElectronAdapter] IPC failed:", ipcErr);
       const err = new Error("IPC 通訊失敗: " + (ipcErr.message || String(ipcErr)));
       err.config = config;
       throw err;
@@ -76,7 +82,7 @@ export function setupElectronAdapter() {
     if (status >= 400) {
       const detail =
         (response?.data && (response.data.detail || response.data.error)) ||
-        `Request failed (status ${status})`;
+        `Request failed (${status})`;
       const error = new Error(detail);
       error.response = httpResponse;
       error.config = config;

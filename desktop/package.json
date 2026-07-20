@@ -1,7 +1,7 @@
 {
   "name": "game-daily-tracker-desktop",
   "version": "1.0.0",
-  "description": "遊戲每日任務追蹤器 - 桌面版",
+  "description": "每日任務管理器 - 桌面版",
   "main": "main.js",
   "author": "Game Tracker",
   "license": "MIT",
@@ -20,7 +20,7 @@
   },
   "build": {
     "appId": "com.gametracker.app",
-    "productName": "遊戲每日任務追蹤器",
+    "productName": "每日任務管理器",
     "copyright": "Copyright © 2026",
     "directories": {
       "output": "dist",
@@ -64,7 +64,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "遊戲任務追蹤器",
+      "shortcutName": "每日任務管理器",
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
       "installerHeaderIcon": "assets/icon.ico"
