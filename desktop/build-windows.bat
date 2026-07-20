@@ -1,5 +1,6 @@
 @echo off
 chcp 65001 >nul
+setlocal
 title Build Game Daily Tracker Desktop App
 color 0A
 
@@ -10,18 +11,25 @@ echo.
 
 REM Check Node.js
 where node >nul 2>&1
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo [ERROR] Node.js not found. Please install from https://nodejs.org/
-    pause
-    exit /b 1
+    goto :end
 )
+for /f "delims=" %%v in ('node --version') do echo [OK] Node.js %%v
+echo.
 
 REM Check Yarn
 where yarn >nul 2>&1
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo Yarn not found, installing globally...
     call npm install -g yarn
+    if errorlevel 1 (
+        echo [ERROR] Failed to install Yarn
+        goto :end
+    )
 )
+for /f "delims=" %%v in ('yarn --version') do echo [OK] Yarn %%v
+echo.
 
 REM Show signing status
 if defined CSC_LINK (
@@ -29,49 +37,66 @@ if defined CSC_LINK (
     echo           Build will be code-signed.
 ) else (
     echo [SIGNING] No CSC_LINK env var set.
-    echo           Build will be UNSIGNED (users will see SmartScreen warning).
+    echo           Build will be UNSIGNED ^(users will see SmartScreen warning^).
     echo           See CODESIGNING.md for details.
 )
 echo.
 
+echo ================================================
 echo [1/4] Installing frontend dependencies...
-cd /d %~dp0..\frontend
+echo ================================================
+pushd "%~dp0..\frontend"
 call yarn install
-if %errorlevel% neq 0 (
-    echo [ERROR] Frontend install failed
-    pause
-    exit /b 1
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Frontend dependency installation failed.
+    popd
+    goto :end
 )
+popd
 echo.
 
+echo ================================================
 echo [2/4] Installing desktop dependencies...
-cd /d %~dp0
+echo ================================================
+pushd "%~dp0"
 call yarn install
-if %errorlevel% neq 0 (
-    echo [ERROR] Desktop install failed
-    pause
-    exit /b 1
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Desktop dependency installation failed.
+    popd
+    goto :end
 )
+popd
 echo.
 
+echo ================================================
 echo [3/4] Building React frontend...
-cd /d %~dp0..\frontend
+echo ================================================
+pushd "%~dp0..\frontend"
 call yarn build
-if %errorlevel% neq 0 (
-    echo [ERROR] React build failed
-    pause
-    exit /b 1
+if errorlevel 1 (
+    echo.
+    echo [ERROR] React build failed.
+    popd
+    goto :end
 )
+popd
 echo.
 
+echo ================================================
 echo [4/4] Packaging Electron desktop app...
-cd /d %~dp0
+echo ================================================
+pushd "%~dp0"
 call yarn electron-builder --win
-if %errorlevel% neq 0 (
-    echo [ERROR] Electron packaging failed
-    pause
-    exit /b 1
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Electron packaging failed.
+    echo         Check the output above for details.
+    popd
+    goto :end
 )
+popd
 echo.
 
 echo ================================================
@@ -87,4 +112,9 @@ if not defined CSC_LINK (
 )
 echo ================================================
 echo.
-pause
+
+:end
+echo.
+echo Press any key to close this window...
+pause >nul
+endlocal

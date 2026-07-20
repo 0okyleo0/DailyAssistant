@@ -82,14 +82,17 @@ yarn dist
 
 ## Build 流程說明
 
-electron-builder 會**自動偵測**環境變數：
+electron-builder **內建**支援環境變數簽章：
 
 ```
-如果設定 CSC_LINK 和 CSC_KEY_PASSWORD
-  → 使用該憑證簽章
-如果未設定
+如果設定 CSC_LINK 和 CSC_KEY_PASSWORD 環境變數
+  → electron-builder 自動用該憑證簽章
+如果未設定環境變數
   → 產生未簽章版本 (跳過簽章步驟)
 ```
+
+> ⚠️ **重要**: `package.json` 中**不需要**寫 `certificateFile` 或 `certificatePassword`。
+> electron-builder 會自動從環境變數讀取，硬編碼反而會導致路徑錯誤。
 
 ### 進階：使用硬體 Token (EV 憑證)
 
@@ -132,9 +135,9 @@ electron-builder 會**自動偵測**環境變數：
 
 您的 electron-builder 設定已支援：
 - ✅ 圖示 (assets/icon.ico) 
-- ✅ 環境變數方式讀取憑證 (CSC_LINK, CSC_KEY_PASSWORD)
+- ✅ 自動讀取環境變數 CSC_LINK 和 CSC_KEY_PASSWORD (electron-builder 內建行為)
 - ✅ SHA-256 簽章演算法
-- ✅ 未設定憑證時自動跳過簽章
+- ✅ 未設定憑證時自動跳過簽章 (不會失敗)
 - ✅ 產生自簽憑證的腳本 (`yarn gen-selfsign`)
 
 **下一步:** 從三種選項中選擇一種，然後執行 `yarn dist` 即可 build 出簽章版本！

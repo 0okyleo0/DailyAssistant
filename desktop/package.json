@@ -55,10 +55,6 @@
       ],
       "artifactName": "GameTracker-Setup-${version}.${ext}",
       "signingHashAlgorithms": ["sha256"],
-      "signAndEditExecutable": true,
-      "signDlls": false,
-      "certificateFile": "${env.CSC_LINK}",
-      "certificatePassword": "${env.CSC_KEY_PASSWORD}",
       "publisherName": "Game Tracker",
       "verifyUpdateCodeSignature": false
     },
