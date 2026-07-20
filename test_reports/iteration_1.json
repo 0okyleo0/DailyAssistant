@@ -1,0 +1,32 @@
+{
+  "summary": "First-finish smoke test of Game Daily Tracker. Verified backend REST endpoints (games CRUD, toggle-task, uncheck-all, settings, daily-records, stats) and frontend core flow (add game with tasks, toggle task, uncheck-all, tab navigation to History and Settings). All backend endpoints returned 200 with expected payloads. Frontend UI renders correctly in Traditional Chinese with dark theme, add-game dialog works, tasks toggle correctly (stats update 0->1 -> back to 0 via uncheck-all), history tab shows stats cards and 7-day chart, settings tab shows reset-time input, notifications switch, save button and manual reset.",
+  "tested_scope": ["backend", "frontend", "integration"],
+  "passed": [
+    "GET /api/ returns 200 with API message",
+    "GET /api/games returns list (200)",
+    "POST /api/games creates game with auto-generated id and order",
+    "POST /api/games/toggle-task toggles task completion",
+    "POST /api/games/uncheck-all resets all tasks to false (verified via subsequent GET)",
+    "GET/PUT /api/settings works (reset_time and notifications_enabled persisted)",
+    "GET /api/daily-records returns list of daily records",
+    "GET /api/stats returns aggregated 7-day and 30-day averages",
+    "DELETE /api/games/{id} removes game (200)",
+    "Frontend loads at REACT_APP_BACKEND_URL with correct zh-TW UI",
+    "Add Game dialog: name, url, and dynamic task inputs (task-input-0/1) with add-task-button",
+    "New game appears in sidebar with '2 個任務' subtitle and shows in Tasks view",
+    "Clicking a task toggles completion; stats card updates (Completed 1, Rate 50%)",
+    "Uncheck-all button resets completed to 0 (confirmed via screenshot)",
+    "Tab navigation to History (charts + stats) and Settings (reset-time-input, notifications-switch, save-settings-button, manual-reset-button) works",
+    "Toast '遊戲已新增' displayed after add"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": [
+    "Did not exhaustively test: edit-game dialog, delete-game via UI, bulk history deletion selection UI, mobile hamburger sidebar, notification permission flow, and auto-reset scheduler (setInterval time-check). These are deferred to full testing.",
+    "No auth in this app; /app/memory/test_credentials.md not required.",
+    "Test data cleaned up via API after run."
+  ]
+}
