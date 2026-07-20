@@ -1,11 +1,38 @@
 @echo off
 chcp 65001 >nul
+
+REM ================================================
+REM Step 0: Self-elevate to Administrator
+REM ================================================
+REM electron-builder needs to create symbolic links for winCodeSign package
+REM which requires admin rights on Windows (unless Developer Mode is enabled)
+net session >nul 2>&1
+if not "%errorlevel%" == "0" (
+    echo.
+    echo ================================================
+    echo   Need Administrator Privileges
+    echo ================================================
+    echo.
+    echo electron-builder needs to create symbolic links,
+    echo which requires administrator privileges on Windows.
+    echo.
+    echo Requesting UAC elevation to restart...
+    echo.
+    echo TIP: To avoid this in the future, you can enable Developer Mode:
+    echo      Settings ^> Privacy ^& Security ^> For developers ^> Developer Mode
+    echo.
+    timeout /t 3 /nobreak >nul
+    powershell -Command "Start-Process cmd.exe -Verb RunAs -ArgumentList '/k cd /d \"\"%~dp0\"\" ^&^& \"\"%~nx0\"\"'"
+    exit /b 0
+)
+
 setlocal
 title Build Game Daily Tracker Desktop App
 color 0A
 
 echo ================================================
 echo   Building Game Daily Tracker Desktop App
+echo   [Running as Administrator]
 echo ================================================
 echo.
 
@@ -92,7 +119,14 @@ call yarn electron-builder --win
 if errorlevel 1 (
     echo.
     echo [ERROR] Electron packaging failed.
-    echo         Check the output above for details.
+    echo.
+    echo Common causes:
+    echo   1. Symbolic link error: Enable Windows Developer Mode
+    echo      Settings ^> Privacy ^& Security ^> For developers ^> Developer Mode
+    echo   2. Network issue downloading electron binary
+    echo      Try running again, or set proxy via HTTP_PROXY env var
+    echo   3. Antivirus blocking: Add exclusion for this folder
+    echo.
     popd
     goto :end
 )
