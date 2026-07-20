@@ -1,0 +1,76 @@
+{
+  "project_name": "Game Daily Tracker Dashboard",
+  "theme_strategy": "Dark Mode Default (Tactical Minimalism for Gaming)",
+  "design_archetype": "ARCHETYPE 2: THE PERFORMANCE PRO (Elite & Precision)",
+  "typography": {
+    "fonts": {
+      "headings": "Outfit, sans-serif",
+      "body": "Inter, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "hierarchy": {
+      "h1": "text-4xl font-bold tracking-tight text-white",
+      "h2": "text-2xl font-semibold tracking-tight text-neutral-100",
+      "h3": "text-xl font-medium tracking-tight text-neutral-200",
+      "body": "text-base font-normal text-neutral-400 leading-relaxed",
+      "labels": "text-xs font-bold tracking-[0.2em] uppercase text-neutral-500"
+    }
+  },
+  "colors": {
+    "background": "#0A0A0A",
+    "surface": "#141414",
+    "surface_glass": "rgba(20, 20, 20, 0.7)",
+    "border": "#262626",
+    "border_hover": "#404040",
+    "primary": "#00F0FF",
+    "primary_foreground": "#0A0A0A",
+    "secondary": "#FFFFFF",
+    "secondary_foreground": "#0A0A0A",
+    "muted": "#737373",
+    "danger": "#FF3B30",
+    "success": "#39FF14"
+  },
+  "grids_and_layouts": {
+    "strategy": "Collapsible Sidebar + High Density Bento Grid",
+    "sidebar": "Fixed left sidebar (w-64) for Game List management. Hidden on mobile, accessible via hamburger. Minimalist item rows with active states.",
+    "main_container": "p-6 md:p-12 min-h-screen",
+    "dashboard_grid": "grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-6",
+    "cards": "Flat solid surfaces. Avoid heavy drop shadows. Use 1px solid stroke (border-border) with subtle inner glow (shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]). No fully transparent backgrounds."
+  },
+  "component_guidelines": {
+    "task_list": "Dense, F-pattern layout. Continuous list with border-b separators. Large hit-area checkboxes. Include a discrete 'external link' icon aligned right for opening the game.",
+    "buttons": "Sharp edges or minimal radius (rounded-md). Primary buttons use vibrant accent. 'Uncheck All' should be a secondary/outline button to avoid accidental clicks.",
+    "charts": "Shadcn Chart (Recharts). Bar charts for weekly completion (monochrome bars with accent color for today). Line charts for monthly trends. Hide grid lines for minimalism.",
+    "forms": "Use Shadcn Input, Select. Custom time picker for 'Daily Reset Time'. Settings modal for toggling browser notifications.",
+    "tabs": "Override standard Shadcn tabs. Use clean underline styles or stark pill shapes for switching between 'Tasks', 'History', 'Settings'."
+  },
+  "motion": {
+    "interactions": "Hover states must explicitly set text color (e.g., hover:bg-neutral-800 hover:text-white). Focus states must have high contrast rings.",
+    "transitions": "Use specific properties (e.g., transition-colors duration-200). DO NOT use 'transition: all'.",
+    "checkbox": "Subtle scale bump on check. Strikethrough text animation for completed tasks."
+  },
+  "accessibility": {
+    "contrast": "Strict APCA contrast. Text must be readable. Hover states must be lighter than active states.",
+    "data_testid": "ALL interactive elements must have a data-testid (e.g., 'game-item', 'task-checkbox', 'uncheck-all-btn', 'reset-time-input')."
+  },
+  "visual_enhancers": {
+    "icons": "Use lucide-react. Keep stroke width to 1.5 for a sophisticated look.",
+    "empty_states": "No blank charts. Display stylized ASCII art or stark typography like 'No tasks deployed.' with a clear CTA to add a game."
+  },
+  "instructions_to_main_agent": [
+    "Develop exclusively in .js / .jsx using React, Tailwind CSS, and Shadcn UI primitives.",
+    "Ensure 'Dark Mode' is the default and structurally sound (use exact hex codes provided or map them to Tailwind config).",
+    "Implement the daily reset logic visually. If relying on a mock backend, simulate the timer and reset functionality clearly.",
+    "Do not use Generic Slop. Avoid standard SaaS Blue. Follow the 'Performance Pro' archetype.",
+    "Build the History view with comprehensive tables and Recharts for Monthly/Weekly stats. Include a bold 'Delete History' zone.",
+    "For the 'Open Game Link', ensure target='_blank' rel='noopener noreferrer'."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You MUST NOT apply universal transition (e.g., transition: all).",
+    "You MUST NOT center align the app container (.App { text-align: center; } is banned).",
+    "Create depth through layered design elements with z-index hierarchy and subtle borders.",
+    "Use sonner for toast notifications (e.g., 'Tasks Reset', 'Game Added').",
+    "Prioritize using pre-existing components from src/components/ui.",
+    "NEVER use placeholder images or text. Since user generates data, rely on typography and empty states."
+  ]
+}
