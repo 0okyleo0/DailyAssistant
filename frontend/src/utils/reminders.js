@@ -106,10 +106,15 @@ export function checkAndFireReminders(games, options = {}) {
 }
 
 function fireNotification(group, useElectron) {
-  const count = group.length;
-  const title = count === 1
-    ? `提醒: ${group[0].gameName} 的${group[0].typeLabel}即將到期`
-    : `提醒: ${count} 個任務即將到期`;
+  // Use type-specific title. If multiple types in same group, fallback to combined.
+  const types = [...new Set(group.map((r) => r.type))];
+  let title;
+  if (types.length === 1) {
+    const label = types[0] === "daily" ? "每日" : types[0] === "weekly" ? "每周" : "版本";
+    title = `${label}任務到期提醒`;
+  } else {
+    title = "任務到期提醒";
+  }
 
   const body = group
     .map((r) => `• ${r.gameName} - ${r.typeLabel} (${r.minutesBefore} 分鐘後)`)

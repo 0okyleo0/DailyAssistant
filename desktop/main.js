@@ -50,7 +50,7 @@ function createWindow() {
   // Open DevTools by default for diagnostic purposes.
   // Users can toggle it with F12 or Ctrl+Shift+I.
   // If everything works fine, you can remove this line to hide DevTools by default.
-  mainWindow.webContents.openDevTools({ mode: 'detach' });
+  // mainWindow.webContents.openDevTools({ mode: 'detach' });
 
   mainWindow.setMenu(null);
 
