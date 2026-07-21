@@ -42,7 +42,14 @@
 - ✅ Auto-reset logic in App.js checking each game's reset_time every minute
 - ✅ Copy path to clipboard (replaces open-in-browser for local exe files)
 - ✅ Dark mode UI with cyan accents, custom fonts, responsive design
-- ✅ 100% test pass rate (10/10 backend pytest + full frontend UI verification)
+- ✅ Electron desktop app with local JSON data store + native game launching
+- ✅ Windows code signing setup + build script (build-windows.bat)
+- ✅ Daily / Weekly / Version task separation with independent reset rules
+- ✅ Local Data Backup and Restore (JSON)
+- ✅ **[Feb 2026] Custom D:H:M reminder inputs (ReminderInput.jsx)** — daily shows H:M only; weekly/version show D:H:M
+- ✅ **[Feb 2026] Calendar DatePicker for version deadline** (DateTimePicker.jsx w/ Shadcn Calendar + Popover + time input)
+- ✅ **[Feb 2026] Native desktop notifications** — `app.setAppUserModelId('com.dailytasktracker.app')` set in desktop/main.js; Notification with icon + click-to-focus
+- ✅ **[Feb 2026] Settings adapts to Electron** — hides browser notification toggle; shows "桌面通知已自動啟用" instead
 
 ## Prioritized Backlog
 

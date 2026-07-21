@@ -5,6 +5,12 @@ const { launchGame } = require('./game-launcher');
 
 let mainWindow;
 
+// Required for Windows 10/11 native notifications to appear in Action Center
+// and to prevent them from showing as "electron.app.<name>".
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.dailytasktracker.app');
+}
+
 // Set macOS dock icon (Windows uses BrowserWindow.icon, Linux uses .desktop file)
 if (process.platform === 'darwin') {
   const iconPath = path.join(__dirname, 'assets', 'icon.png');
@@ -93,8 +99,34 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('show-notification', (event, { title, body }) => {
-    if (Notification.isSupported()) {
-      new Notification({ title, body }).show();
+    try {
+      if (!Notification.isSupported()) {
+        console.warn('[Notification] Not supported on this OS');
+        return { success: false, error: 'not-supported' };
+      }
+      const iconPath = path.join(
+        __dirname,
+        'assets',
+        process.platform === 'win32' ? 'icon.ico' : 'icon.png'
+      );
+      const n = new Notification({
+        title: title || '每日任務管理器',
+        body: body || '',
+        icon: iconPath,
+        silent: false,
+      });
+      n.on('click', () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.focus();
+        }
+      });
+      n.show();
+      console.log('[Notification] Shown:', title);
+      return { success: true };
+    } catch (err) {
+      console.error('[Notification] Failed:', err);
+      return { success: false, error: err.message };
     }
   });
 

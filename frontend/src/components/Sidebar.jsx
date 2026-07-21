@@ -10,7 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import axios from "axios";
 import { launchGame, copyGamePath } from "@/utils/launcher";
-import { TIME_OPTIONS, WEEKDAY_OPTIONS, REMINDER_OPTIONS } from "@/utils/timeOptions";
+import { TIME_OPTIONS, WEEKDAY_OPTIONS } from "@/utils/timeOptions";
+import { ReminderInput } from "@/components/ReminderInput";
+import { DateTimePicker } from "@/components/DateTimePicker";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -219,7 +221,7 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                     </TabsContent>
 
                     <TabsContent value="daily" className="space-y-4 mt-4">
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <Label className="text-neutral-400 flex items-center gap-1"><Clock className="w-4 h-4" />重置時間</Label>
                           <Select value={dailyResetTime} onValueChange={setDailyResetTime}>
@@ -230,13 +232,13 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                           </Select>
                         </div>
                         <div>
-                          <Label className="text-neutral-400">提醒時間</Label>
-                          <Select value={String(dailyReminder)} onValueChange={(v) => setDailyReminder(Number(v))}>
-                            <SelectTrigger className="bg-[#0A0A0A] border-[#262626] text-white" data-testid="daily-reminder"><SelectValue /></SelectTrigger>
-                            <SelectContent className="bg-[#141414] border-[#262626] text-white">
-                              {REMINDER_OPTIONS.map((r) => <SelectItem key={r.value} value={String(r.value)}>{r.label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                          <Label className="text-neutral-400">提醒</Label>
+                          <ReminderInput
+                            value={dailyReminder}
+                            onChange={setDailyReminder}
+                            showDays={false}
+                            testIdPrefix="daily-reminder"
+                          />
                         </div>
                       </div>
                       <div>
@@ -246,7 +248,7 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                     </TabsContent>
 
                     <TabsContent value="weekly" className="space-y-4 mt-4">
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
                           <Label className="text-neutral-400">重置日</Label>
                           <Select value={String(weeklyResetDay)} onValueChange={(v) => setWeeklyResetDay(Number(v))}>
@@ -265,15 +267,15 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div>
-                          <Label className="text-neutral-400">提醒時間</Label>
-                          <Select value={String(weeklyReminder)} onValueChange={(v) => setWeeklyReminder(Number(v))}>
-                            <SelectTrigger className="bg-[#0A0A0A] border-[#262626] text-white" data-testid="weekly-reminder"><SelectValue /></SelectTrigger>
-                            <SelectContent className="bg-[#141414] border-[#262626] text-white">
-                              {REMINDER_OPTIONS.map((r) => <SelectItem key={r.value} value={String(r.value)}>{r.label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-neutral-400">提醒</Label>
+                        <ReminderInput
+                          value={weeklyReminder}
+                          onChange={setWeeklyReminder}
+                          showDays={true}
+                          testIdPrefix="weekly-reminder"
+                        />
                       </div>
                       <div>
                         <Label className="text-neutral-400">每周任務清單</Label>
@@ -282,20 +284,22 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                     </TabsContent>
 
                     <TabsContent value="version" className="space-y-4 mt-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <Label className="text-neutral-400">到期時間</Label>
-                          <Input type="datetime-local" value={versionDeadline} onChange={(e) => setVersionDeadline(e.target.value)} className="bg-[#0A0A0A] border-[#262626] text-white" data-testid="version-deadline" />
-                        </div>
-                        <div>
-                          <Label className="text-neutral-400">提醒時間</Label>
-                          <Select value={String(versionReminder)} onValueChange={(v) => setVersionReminder(Number(v))}>
-                            <SelectTrigger className="bg-[#0A0A0A] border-[#262626] text-white" data-testid="version-reminder"><SelectValue /></SelectTrigger>
-                            <SelectContent className="bg-[#141414] border-[#262626] text-white">
-                              {REMINDER_OPTIONS.map((r) => <SelectItem key={r.value} value={String(r.value)}>{r.label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                      <div>
+                        <Label className="text-neutral-400">到期時間</Label>
+                        <DateTimePicker
+                          value={versionDeadline}
+                          onChange={setVersionDeadline}
+                          testIdPrefix="version-deadline"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-neutral-400">提醒</Label>
+                        <ReminderInput
+                          value={versionReminder}
+                          onChange={setVersionReminder}
+                          showDays={true}
+                          testIdPrefix="version-reminder"
+                        />
                       </div>
                       <div>
                         <Label className="text-neutral-400">版本任務清單</Label>

@@ -71,9 +71,13 @@ function App() {
     try {
       const res = await axios.get(`${API}/games`);
       const current = res.data;
+      const isElectron = typeof window !== "undefined" && !!window.electronAPI;
+      // In Electron, notifications are always enabled (native OS notifications).
+      // In web mode, respect the settings toggle.
+      const enabled = isElectron ? true : settings?.notifications_enabled !== false;
       checkAndFireReminders(current, {
-        enabled: settings?.notifications_enabled !== false,
-        useElectron: typeof window !== "undefined" && !!window.electronAPI,
+        enabled,
+        useElectron: isElectron,
       });
     } catch (e) {
       console.error("Reminder check error:", e);

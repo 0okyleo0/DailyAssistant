@@ -18,6 +18,7 @@ function SettingsView({ settings, onSettingsChange, onDataChange }) {
   const [saving, setSaving] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const fileInputRef = useRef(null);
+  const isElectron = typeof window !== "undefined" && !!window.electronAPI;
 
   useEffect(() => {
     if (settings) {
@@ -179,15 +180,27 @@ function SettingsView({ settings, onSettingsChange, onDataChange }) {
       {/* Notifications */}
       <div className="p-6 rounded-lg bg-[#141414] border border-[#262626]">
         <h3 className="text-xl font-medium text-neutral-200 mb-4">通知設定</h3>
-        <div className="flex items-center justify-between py-4">
-          <div className="space-y-1">
-            <Label className="flex items-center gap-2 text-neutral-400">
-              <Bell className="w-4 h-4" />啟用瀏覽器通知
-            </Label>
-            <p className="text-xs text-neutral-500">在任務重置及提醒時間發送通知</p>
+        {isElectron ? (
+          <div className="flex items-start gap-3 py-2">
+            <Bell className="w-5 h-5 text-[#39FF14] flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <Label className="text-neutral-200">桌面通知已自動啟用</Label>
+              <p className="text-xs text-neutral-500">
+                任務重置及提醒會以系統原生通知顯示 (Windows Action Center / macOS 通知中心)
+              </p>
+            </div>
           </div>
-          <Switch checked={notificationsEnabled} onCheckedChange={setNotificationsEnabled} data-testid="notifications-switch" />
-        </div>
+        ) : (
+          <div className="flex items-center justify-between py-4">
+            <div className="space-y-1">
+              <Label className="flex items-center gap-2 text-neutral-400">
+                <Bell className="w-4 h-4" />啟用瀏覽器通知
+              </Label>
+              <p className="text-xs text-neutral-500">在任務重置及提醒時間發送通知</p>
+            </div>
+            <Switch checked={notificationsEnabled} onCheckedChange={setNotificationsEnabled} data-testid="notifications-switch" />
+          </div>
+        )}
       </div>
 
       <div className="flex gap-3">
