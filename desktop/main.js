@@ -114,9 +114,8 @@ async function handleApiRequest({ method, url, data }) {
   const query = Object.fromEntries(urlObj.searchParams);
   const m = method.toUpperCase();
 
-  // Root
   if (m === 'GET' && pathname === '/api/') {
-    return { status: 200, data: { message: 'Game Daily Tracker Desktop API' } };
+    return { status: 200, data: { message: 'Daily Task Manager Desktop API' } };
   }
 
   // Games
@@ -141,18 +140,28 @@ async function handleApiRequest({ method, url, data }) {
     }
   }
   if (m === 'POST' && pathname === '/api/games/toggle-task') {
-    const result = dataStore.toggleTask(data.game_id, data.task_id, data.completed);
+    const result = dataStore.toggleTask(data.game_id, data.task_id, data.completed, data.task_type || 'daily');
     if (!result) return { status: 404, data: { detail: 'Game or task not found' } };
     return { status: 200, data: { message: 'Task updated successfully' } };
   }
   if (m === 'POST' && pathname === '/api/games/uncheck-all') {
-    dataStore.uncheckAllTasks();
+    dataStore.uncheckAllTasks((data && data.task_type) || 'all');
     return { status: 200, data: { message: 'All tasks unchecked successfully' } };
   }
-  if (m === 'POST' && pathname === '/api/games/reset-game') {
-    const result = dataStore.resetGame(data.game_id);
+  if (m === 'POST' && (pathname === '/api/games/reset-game' || pathname === '/api/games/reset-daily')) {
+    const result = dataStore.resetDaily(data.game_id);
     if (!result) return { status: 404, data: { detail: 'Game not found' } };
-    return { status: 200, data: { message: 'Game reset successfully', record: result } };
+    return { status: 200, data: { message: 'Daily reset', record: result } };
+  }
+  if (m === 'POST' && pathname === '/api/games/reset-weekly') {
+    const result = dataStore.resetWeekly(data.game_id);
+    if (!result) return { status: 404, data: { detail: 'Game not found' } };
+    return { status: 200, data: { message: 'Weekly reset', record: result } };
+  }
+  if (m === 'POST' && pathname === '/api/games/archive-version') {
+    const result = dataStore.archiveVersion(data.game_id);
+    if (!result) return { status: 404, data: { detail: 'Game not found' } };
+    return { status: 200, data: { message: 'Version archived', record: result } };
   }
 
   // Settings
@@ -166,25 +175,29 @@ async function handleApiRequest({ method, url, data }) {
   // Daily records
   if (m === 'GET' && pathname === '/api/daily-records') {
     const limit = parseInt(query.limit || '100', 10);
-    return { status: 200, data: dataStore.getDailyRecords(limit, query.game_id) };
-  }
-  const recordMatch = pathname.match(/^\/api\/daily-records\/([^/]+)$/);
-  if (recordMatch && m === 'DELETE') {
-    const recordId = recordMatch[1];
-    if (recordId === 'bulk') {
-      // Handle /api/daily-records/bulk/delete case below
-    } else {
-      const deleted = dataStore.deleteDailyRecord(recordId);
-      if (!deleted) return { status: 404, data: { detail: 'Record not found' } };
-      return { status: 200, data: { message: 'Record deleted successfully' } };
-    }
+    return { status: 200, data: dataStore.getDailyRecords(limit, query.game_id, query.task_type) };
   }
   if (m === 'DELETE' && pathname === '/api/daily-records/bulk/delete') {
     const count = dataStore.bulkDeleteRecords(data || []);
     return { status: 200, data: { message: `${count} records deleted successfully` } };
   }
+  const recordMatch = pathname.match(/^\/api\/daily-records\/([^/]+)$/);
+  if (recordMatch && m === 'DELETE') {
+    const deleted = dataStore.deleteDailyRecord(recordMatch[1]);
+    if (!deleted) return { status: 404, data: { detail: 'Record not found' } };
+    return { status: 200, data: { message: 'Record deleted successfully' } };
+  }
   if (m === 'GET' && pathname === '/api/stats') {
-    return { status: 200, data: dataStore.getStats(query.game_id) };
+    return { status: 200, data: dataStore.getStats(query.game_id, query.task_type) };
+  }
+
+  // Backup / Restore
+  if (m === 'GET' && pathname === '/api/backup') {
+    return { status: 200, data: dataStore.backupAll() };
+  }
+  if (m === 'POST' && pathname === '/api/restore') {
+    const info = dataStore.restoreAll(data || {});
+    return { status: 200, data: { message: 'Restore complete', ...info } };
   }
 
   return { status: 404, data: { detail: `No route for ${method} ${pathname}` } };

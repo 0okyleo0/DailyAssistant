@@ -1,0 +1,34 @@
+{
+  "summary": "End-to-end verification of Weekly + Version task expansion, per-type reminders/reset dropdowns, and backup/restore. Backend: 11 new pytest cases (all pass) covering multi-type game create, toggle-task per type, uncheck-all filter, reset-weekly, archive-version, daily-records/stats task_type filter, backup, restore. Regression: 13 pre-existing tests still pass. Frontend: full flow tested — add game with 4 tabs (基本/每日/每周/版本), reminder select has 11 options, time select has 48 options, weekday select has 7 labels 週日→週六, save creates game with all fields, TasksView shows 3 stats cards + 3 sub-tabs, version card shows deadline/剩N天/歸檔 button, task toggle updates stats to 100%, HistoryView has 4 filter tabs (daily/weekly/version/all), SettingsView backup downloads valid JSON (version=2, keys: games/settings/daily_records/timestamp/version) with all new per-type fields preserved.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Add/Edit game dialog & help dialog", "issues": ["Radix DialogContent still missing aria-describedby (a11y console warning, non-blocking, carried over from iter10)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_weekly_version_backup.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iter11.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend _save_record_and_reset uses record id 'record_{type}_{game}_{yesterday}' with upsert — good idempotency and no collision across types.",
+    "archive_version clears version_deadline and version_tasks and flags version_archived=True — matches spec.",
+    "GET /api/daily-records and /api/stats correctly ignore task_type='all' and filter otherwise.",
+    "POST /api/restore accepts partial payload (games / settings / daily_records optional) and delete_many+insert_many is atomic-enough for local single-user use.",
+    "Frontend HistoryView keeps taskType state per-tab and refetches — clean pattern.",
+    "SettingsView.handleRestore does confirm+parse+POST and refreshes settings and games via onDataChange — solid UX.",
+    "Minor: React warns 'DialogContent missing Description' — main agent could add a hidden <DialogDescription> for a11y.",
+    "Minor: weekly_reset_day defaults to 1 (Monday) in both backend GameCreate and frontend state — consistent."
+  ],
+  "updated_files": ["/app/backend/tests/test_weekly_version_backup.py"],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "100%"},
+  "seed_data_creation": "Created TEST_MultiType_Game via API (auto-cleaned by fixture) and TEST_WebGame_Multi via UI (cleaned via API DELETE at end of Playwright run).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All new endpoints verified: /api/games (weekly_*/version_* fields round-trip), /api/games/toggle-task (task_type), /api/games/uncheck-all (task_type filter), /api/games/reset-weekly, /api/games/archive-version, /api/daily-records?task_type=, /api/stats?task_type=, /api/backup, /api/restore. Backup version=2, timestamp present. Frontend backup download works in browser (Blob+revokeObjectURL). Version deadline uses datetime-local YYYY-MM-DDTHH:MM. Weekday select follows JS getDay() (0=Sun..6=Sat). Reminder minute mapping verified: 15 label = '15 分鐘前', 1440 = '1 天前'.",
+  "rca of the issue": "N/A — feature verification iteration."
+}

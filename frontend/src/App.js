@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import "@/App.css";
 import axios from "axios";
 import { Toaster } from "@/components/ui/sonner";
@@ -9,6 +9,7 @@ import HistoryView from "@/components/HistoryView";
 import SettingsView from "@/components/SettingsView";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckSquare, History, Settings } from "lucide-react";
+import { shouldResetGames, checkAndFireReminders } from "@/utils/reminders";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -19,94 +20,87 @@ function App() {
   const [activeTab, setActiveTab] = useState("tasks");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    // Diagnostic: check Electron API availability
-    if (typeof window !== "undefined") {
-      console.log("[App] window.electronAPI:", window.electronAPI);
-      if (window.electronAPI?.request) {
-        window.electronAPI
-          .request({ method: "GET", url: "/api/" })
-          .then((r) => console.log("[App] IPC test OK:", r))
-          .catch((e) => console.error("[App] IPC test failed:", e));
-      } else {
-        console.warn("[App] Not running in Electron or electronAPI not exposed");
-      }
-    }
-
-    fetchGames();
-    fetchSettings();
-    checkAutoReset();
-
-    // Check for auto-reset every minute
-    const interval = setInterval(checkAutoReset, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchGames = async () => {
+  const fetchGames = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/games`);
       setGames(response.data);
     } catch (e) {
       console.error("Error fetching games:", e);
     }
-  };
+  }, []);
 
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/settings`);
       setSettings(response.data);
     } catch (e) {
       console.error("Error fetching settings:", e);
     }
-  };
+  }, []);
 
-  const checkAutoReset = async () => {
+  const runAutoReset = useCallback(async () => {
     try {
-      const gamesRes = await axios.get(`${API}/games`);
-      const currentGames = gamesRes.data;
+      const res = await axios.get(`${API}/games`);
+      const current = res.data;
+      const toReset = shouldResetGames(current);
+      if (toReset.length === 0) return;
 
-      const now = new Date();
-      const today = now.toISOString().split('T')[0];
-
-      for (const game of currentGames) {
-        if (!game.reset_time) continue;
-
-        const [hours, minutes] = game.reset_time.split(':');
-        const resetTime = new Date();
-        resetTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-
-        // Check if we've passed the reset time and haven't reset today
-        if (now >= resetTime && game.last_reset_date !== today) {
-          // Reset this game
-          await axios.post(`${API}/games/reset-game`, { game_id: game.id });
-          
-          if (settings?.notifications_enabled && "Notification" in window && Notification.permission === "granted") {
-            new Notification(`${game.name} 已重置`, {
-              body: "每日任務已自動重置",
-              icon: "/favicon.ico"
-            });
+      const notified = [];
+      for (const item of toReset) {
+        try {
+          if (item.type === "daily") {
+            await axios.post(`${API}/games/reset-daily`, { game_id: item.gameId });
+          } else if (item.type === "weekly") {
+            await axios.post(`${API}/games/reset-weekly`, { game_id: item.gameId });
           }
-          
-          toast.success(`${game.name} 已自動重置`);
+          notified.push(`${item.gameName} - ${item.type === "weekly" ? "每周" : "每日"}任務`);
+        } catch (err) {
+          console.error("Reset failed:", err);
         }
       }
-
-      // Refresh games after any resets
-      fetchGames();
+      if (notified.length > 0) {
+        toast.success(`已自動重置: ${notified.join(", ")}`);
+        fetchGames();
+      }
     } catch (e) {
-      console.error("Error checking auto-reset:", e);
+      console.error("Auto-reset error:", e);
     }
-  };
+  }, [fetchGames]);
 
-  const requestNotificationPermission = async () => {
-    if ("Notification" in window && Notification.permission === "default") {
-      await Notification.requestPermission();
+  const runReminders = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/games`);
+      const current = res.data;
+      checkAndFireReminders(current, {
+        enabled: settings?.notifications_enabled !== false,
+        useElectron: typeof window !== "undefined" && !!window.electronAPI,
+      });
+    } catch (e) {
+      console.error("Reminder check error:", e);
     }
-  };
+  }, [settings?.notifications_enabled]);
 
   useEffect(() => {
-    if (settings?.notifications_enabled) {
-      requestNotificationPermission();
+    if (typeof window !== "undefined") {
+      console.log("[App] window.electronAPI:", window.electronAPI);
+    }
+    fetchGames();
+    fetchSettings();
+  }, [fetchGames, fetchSettings]);
+
+  useEffect(() => {
+    runAutoReset();
+    runReminders();
+    const interval = setInterval(() => {
+      runAutoReset();
+      runReminders();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [runAutoReset, runReminders]);
+
+  useEffect(() => {
+    if (settings?.notifications_enabled && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
     }
   }, [settings?.notifications_enabled]);
 
@@ -114,14 +108,14 @@ function App() {
     <div className="App min-h-screen">
       <Toaster position="top-right" richColors />
       <div className="flex">
-        <Sidebar 
-          games={games} 
+        <Sidebar
+          games={games}
           onGamesChange={fetchGames}
           isOpen={sidebarOpen}
           onToggle={() => setSidebarOpen(!sidebarOpen)}
           settings={settings}
         />
-        
+
         <main className="flex-1 p-6 md:p-12">
           <div className="max-w-7xl mx-auto">
             <header className="mb-8">
@@ -129,7 +123,7 @@ function App() {
                 每日任務管理器
               </h1>
               <p className="text-base text-neutral-400">
-                管理您的遊戲日常任務,追蹤完成進度
+                管理您的遊戲日常、每周與版本任務,追蹤完成進度
               </p>
             </header>
 
@@ -158,7 +152,7 @@ function App() {
               </TabsContent>
 
               <TabsContent value="settings" className="mt-0">
-                <SettingsView settings={settings} onSettingsChange={fetchSettings} />
+                <SettingsView settings={settings} onSettingsChange={fetchSettings} onDataChange={fetchGames} />
               </TabsContent>
             </Tabs>
           </div>
