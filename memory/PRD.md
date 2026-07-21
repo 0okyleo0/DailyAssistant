@@ -50,6 +50,14 @@
 - ✅ **[Feb 2026] Calendar DatePicker for version deadline** (DateTimePicker.jsx w/ Shadcn Calendar + Popover + time input)
 - ✅ **[Feb 2026] Native desktop notifications** — `app.setAppUserModelId('com.dailytasktracker.app')` set in desktop/main.js; Notification with icon + click-to-focus
 - ✅ **[Feb 2026] Settings adapts to Electron** — hides browser notification toggle; shows "桌面通知已自動啟用" instead
+- ✅ **[Feb 2026] 通知標題按類型變化** — 每日/每周/版本任務到期提醒
+- ✅ **[Feb 2026] 24 小時制版本到期時間選擇** — DateTimePicker 改用兩個 24h Select
+- ✅ **[Feb 2026] 通知附註格式化** — `formatMinutes` 助手 (X 天 X 小時 X 分鐘後，省略 0)
+- ✅ **[Feb 2026] 每周/版本任務可獨立設定時間** — 每周任務可自訂 reset_day/reset_time；版本任務每筆獨立 deadline_type (`date`/`days`)、`cycle_enabled`
+- ✅ **[Feb 2026] 版本任務循環開關** — days 模式下開啟後到期自動以 N 天為週期重置
+- ✅ **[Feb 2026] 每周/版本任務顯示剩餘時間** — 每個 task 右側顯示 target datetime + 格式化剩餘；<24h 時紅色標註
+- ✅ **[Feb 2026] 歷史紀錄按日期分組** — 同日期同類型合併，點展開後才列出各遊戲；父列勾選同步子項；整組刪除按鈕
+- ✅ **[Feb 2026] 開啟時不再自動彈出 DevTools** — F12/Ctrl+Shift+I 手動開啟
 
 ## Prioritized Backlog
 

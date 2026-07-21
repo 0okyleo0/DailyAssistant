@@ -83,3 +83,87 @@ export function parseVersionDeadline(deadlineStr) {
     return null;
   }
 }
+
+/**
+ * Format a minute count as "X 天 X 小時 X 分鐘後", omitting zero segments.
+ * Examples: 10 -> "10 分鐘後" ; 60 -> "1 小時後" ; 1455 -> "1 天 15 分鐘後"
+ */
+export function formatMinutes(totalMinutes) {
+  const m = Math.max(0, Math.round(Number(totalMinutes) || 0));
+  const days = Math.floor(m / 1440);
+  const hours = Math.floor((m % 1440) / 60);
+  const minutes = m % 60;
+  const parts = [];
+  if (days > 0) parts.push(`${days} 天`);
+  if (hours > 0) parts.push(`${hours} 小時`);
+  if (minutes > 0) parts.push(`${minutes} 分鐘`);
+  if (parts.length === 0) parts.push("0 分鐘");
+  return parts.join(" ") + "後";
+}
+
+/**
+ * Compute the next reset Date for a weekly task, honoring per-task overrides.
+ */
+export function computeWeeklyTaskReset(task, game, referenceDate = new Date()) {
+  const day = task?.reset_day ?? game?.weekly_reset_day ?? 1;
+  const time = task?.reset_time || game?.weekly_reset_time || "00:00";
+  return nextWeeklyResetDate(day, time, referenceDate);
+}
+
+/**
+ * Compute the next reset Date for a daily task (currently game-level).
+ */
+export function computeDailyReset(game, referenceDate = new Date()) {
+  return nextDailyResetDate(game?.reset_time || "00:00", referenceDate);
+}
+
+/**
+ * Compute the deadline Date for a version task.
+ * Supports two modes:
+ *  - 'date': explicit deadline_date (YYYY-MM-DD) + deadline_time (HH:MM)
+ *  - 'days': relative deadline_days from task's next_deadline_at anchor (already stored as ISO)
+ * If cycle_enabled + past deadline, advance by deadline_days.
+ */
+export function computeVersionTaskDeadline(task, referenceDate = new Date()) {
+  if (!task) return null;
+  const mode = task.deadline_type || (task.deadline_days ? "days" : "date");
+  const time = task.deadline_time || "00:00";
+  const [h, m] = time.split(":").map(Number);
+
+  if (mode === "date") {
+    if (!task.deadline_date) return null;
+    const [y, mo, d] = task.deadline_date.split("-").map(Number);
+    if (!y || !mo || !d) return null;
+    const dt = new Date(y, mo - 1, d, h || 0, m || 0, 0, 0);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  // days mode - use next_deadline_at as anchor; advance if cycle enabled
+  if (mode === "days") {
+    const days = Number(task.deadline_days) || 0;
+    if (!task.next_deadline_at) return null;
+    let dt = new Date(task.next_deadline_at);
+    if (isNaN(dt.getTime())) return null;
+    if (task.cycle_enabled && days > 0) {
+      // Advance forward until dt > referenceDate
+      while (dt <= referenceDate) {
+        dt = new Date(dt.getTime() + days * 86400000);
+      }
+    }
+    return dt;
+  }
+  return null;
+}
+
+/**
+ * Build initial next_deadline_at for a version task in days mode.
+ * created = now if not provided.
+ */
+export function initialVersionNextDeadline(days, time, created = new Date()) {
+  const n = Number(days) || 0;
+  const [h, m] = (time || "00:00").split(":").map(Number);
+  const dt = new Date(created);
+  dt.setDate(dt.getDate() + n);
+  dt.setHours(h || 0, m || 0, 0, 0);
+  return dt.toISOString();
+}

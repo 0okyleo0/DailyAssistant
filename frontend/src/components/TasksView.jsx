@@ -1,11 +1,17 @@
-import { useState } from "react";
-import { Copy, CheckCircle2, Circle, Clock, Rocket, Calendar, Archive } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Copy, CheckCircle2, Circle, Clock, Rocket, Calendar, Archive, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import axios from "axios";
 import { launchGame, copyGamePath } from "@/utils/launcher";
-import { weekdayLabel, parseVersionDeadline } from "@/utils/timeOptions";
+import {
+  weekdayLabel,
+  formatMinutes,
+  computeDailyReset,
+  computeWeeklyTaskReset,
+  computeVersionTaskDeadline,
+} from "@/utils/timeOptions";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -16,9 +22,27 @@ const FIELDS = {
   version: { tasks: "version_tasks", label: "版本任務" },
 };
 
+// Format a Date as "YYYY/MM/DD HH:MM"
+function fmtDateTime(d) {
+  if (!d) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}/${mm}/${dd} ${hh}:${mi}`;
+}
+
 function TasksView({ games, onGamesChange, settings }) {
   const [activeType, setActiveType] = useState("daily");
+  // Force re-render every 30s so "剩餘時間" stays fresh
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
   const proto = settings?.custom_protocol || "gamelauncher";
+  const now = new Date();
 
   const handleToggleTask = async (gameId, taskId, completed, taskType) => {
     try {
@@ -66,42 +90,94 @@ function TasksView({ games, onGamesChange, settings }) {
     return { total, done, rate };
   };
 
-  const remainingDays = (deadlineStr) => {
-    const d = parseVersionDeadline(deadlineStr);
-    if (!d) return null;
-    const diff = Math.ceil((d - new Date()) / 86400000);
-    return diff;
+  // Compute a task's next target time. Returns { target, minutesLeft, dueSoon }.
+  const taskTiming = (game, task, type) => {
+    let target = null;
+    if (type === "daily") target = computeDailyReset(game, now);
+    else if (type === "weekly") target = computeWeeklyTaskReset(task, game, now);
+    else if (type === "version") target = computeVersionTaskDeadline(task, now);
+    if (!target) return { target: null, minutesLeft: null, dueSoon: false };
+    const minutesLeft = Math.max(0, Math.round((target - now) / 60000));
+    const dueSoon = type !== "daily" && minutesLeft <= 1440; // <24h and not daily
+    return { target, minutesLeft, dueSoon };
   };
 
-  const renderTaskRow = (game, task, type) => (
-    <div
-      key={task.id}
-      className="p-4 flex items-center gap-3 hover:bg-[#0A0A0A] transition-colors cursor-pointer"
-      onClick={() => handleToggleTask(game.id, task.id, task.completed, type)}
-      data-testid={`task-item-${task.id}`}
-    >
-      <button className="flex-shrink-0">
-        {task.completed ? <CheckCircle2 className="w-6 h-6 text-[#39FF14]" /> : <Circle className="w-6 h-6 text-neutral-500" />}
-      </button>
-      <span className={`text-base flex-1 transition-all ${task.completed ? "line-through text-neutral-500" : "text-neutral-200"}`}>
-        {task.name}
-      </span>
-    </div>
-  );
+  const renderTaskRow = (game, task, type) => {
+    const timing = taskTiming(game, task, type);
+    const showTiming = type !== "daily" && timing.target;
+    return (
+      <div
+        key={task.id}
+        className="p-4 flex items-center gap-3 hover:bg-[#0A0A0A] transition-colors cursor-pointer"
+        onClick={() => handleToggleTask(game.id, task.id, task.completed, type)}
+        data-testid={`task-item-${task.id}`}
+      >
+        <button className="flex-shrink-0">
+          {task.completed ? <CheckCircle2 className="w-6 h-6 text-[#39FF14]" /> : <Circle className="w-6 h-6 text-neutral-500" />}
+        </button>
+        <span className={`text-base flex-1 transition-all ${task.completed ? "line-through text-neutral-500" : "text-neutral-200"}`}>
+          {task.name}
+        </span>
+        {showTiming && (
+          <div className="flex flex-col items-end text-xs shrink-0">
+            <span className="text-neutral-500" data-testid={`task-target-${task.id}`}>
+              {type === "weekly" ? weekdayLabel(task.reset_day ?? game.weekly_reset_day) + " " : ""}
+              {fmtDateTime(timing.target)}
+              {type === "version" && task.cycle_enabled && (
+                <Repeat className="inline w-3 h-3 ml-1 text-[#00F0FF]" />
+              )}
+            </span>
+            <span
+              className={timing.dueSoon ? "text-[#FF3B30] font-semibold" : "text-neutral-400"}
+              data-testid={`task-remaining-${task.id}`}
+            >
+              {formatMinutes(timing.minutesLeft)}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderGameCard = (game, type) => {
     const field = FIELDS[type].tasks;
     const tasks = game[field] || [];
+
+    // Game-level subtitle (defaults / summary)
     let subtitle = "";
+    let dueSoon = false;
     if (type === "daily") {
-      subtitle = `每日 ${game.reset_time || "00:00"} 自動重置`;
+      const daily = taskTiming(game, {}, "daily");
+      if (daily.target) {
+        subtitle = `每日 ${game.reset_time || "00:00"} 重置 · ${formatMinutes(daily.minutesLeft)}`;
+      } else {
+        subtitle = `每日 ${game.reset_time || "00:00"} 重置`;
+      }
     } else if (type === "weekly") {
-      subtitle = `${weekdayLabel(game.weekly_reset_day)} ${game.weekly_reset_time || "00:00"} 自動重置`;
+      // Use the soonest task; if none, fall back to game defaults
+      let earliest = null;
+      for (const t of tasks) {
+        const dt = computeWeeklyTaskReset(t, game, now);
+        if (dt && (!earliest || dt < earliest)) earliest = dt;
+      }
+      if (earliest) {
+        const mins = Math.max(0, Math.round((earliest - now) / 60000));
+        dueSoon = mins <= 1440;
+        subtitle = `最快重置: ${fmtDateTime(earliest)} · ${formatMinutes(mins)}`;
+      } else {
+        subtitle = `${weekdayLabel(game.weekly_reset_day)} ${game.weekly_reset_time || "00:00"} 預設重置`;
+      }
     } else {
-      const d = parseVersionDeadline(game.version_deadline);
-      if (d) {
-        const days = remainingDays(game.version_deadline);
-        subtitle = `到期: ${d.toLocaleString("zh-TW", { hour12: false })} (剩 ${days} 天)`;
+      // version
+      let earliest = null;
+      for (const t of tasks) {
+        const dt = computeVersionTaskDeadline(t, now);
+        if (dt && (!earliest || dt < earliest)) earliest = dt;
+      }
+      if (earliest) {
+        const mins = Math.max(0, Math.round((earliest - now) / 60000));
+        dueSoon = mins <= 1440;
+        subtitle = `最快到期: ${fmtDateTime(earliest)} · ${formatMinutes(mins)}`;
       } else {
         subtitle = "未設定到期時間";
       }
@@ -112,13 +188,13 @@ function TasksView({ games, onGamesChange, settings }) {
         <div className="p-4 border-b border-[#262626] flex items-center justify-between gap-2 flex-wrap">
           <div>
             <h3 className="text-xl font-medium text-neutral-200">{game.name}</h3>
-            <div className="flex items-center gap-2 mt-1 text-xs text-neutral-500">
+            <div className={`flex items-center gap-2 mt-1 text-xs ${dueSoon ? "text-[#FF3B30] font-semibold" : "text-neutral-500"}`} data-testid={`game-subtitle-${game.id}-${type}`}>
               <Clock className="w-3 h-3" />
               <span>{subtitle}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {type === "version" && game.version_deadline && (
+            {type === "version" && tasks.length > 0 && (
               <button
                 onClick={() => handleArchiveVersion(game.id)}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-neutral-800 border border-[#262626] hover:border-neutral-500 text-neutral-300 text-sm transition-colors"

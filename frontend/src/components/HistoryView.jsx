@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Trash2, Calendar, Filter } from "lucide-react";
+import { Trash2, Calendar, Filter, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,11 +20,12 @@ function HistoryView({ games }) {
   const [selectedRecords, setSelectedRecords] = useState([]);
   const [filterGameId, setFilterGameId] = useState("all");
   const [taskType, setTaskType] = useState("daily");
+  const [expandedGroups, setExpandedGroups] = useState({});
 
   const fetchRecords = useCallback(async () => {
     try {
       const params = new URLSearchParams();
-      params.set("limit", "100");
+      params.set("limit", "1000");
       if (filterGameId !== "all") params.set("game_id", filterGameId);
       if (taskType !== "all") params.set("task_type", taskType);
       const res = await axios.get(`${API}/daily-records?${params.toString()}`);
@@ -50,6 +51,7 @@ function HistoryView({ games }) {
     fetchRecords();
     fetchStats();
     setSelectedRecords([]);
+    setExpandedGroups({});
   }, [fetchRecords, fetchStats]);
 
   const handleDeleteRecord = async (recordId) => {
@@ -82,6 +84,50 @@ function HistoryView({ games }) {
 
   const toggleRecordSelection = (recordId) =>
     setSelectedRecords((prev) => (prev.includes(recordId) ? prev.filter((id) => id !== recordId) : [...prev, recordId]));
+
+  // ===== Group records by (date + task_type) =====
+  const grouped = (() => {
+    const map = new Map();
+    for (const r of records) {
+      const key = `${r.date}__${r.task_type || "daily"}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          date: r.date,
+          task_type: r.task_type || "daily",
+          items: [],
+        });
+      }
+      map.get(key).items.push(r);
+    }
+    // Sort groups by date desc
+    return Array.from(map.values()).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  })();
+
+  const groupStats = (group) => {
+    let totalTasks = 0, done = 0;
+    for (const r of group.items) {
+      totalTasks += r.total_tasks || 0;
+      done += r.completed_tasks || 0;
+    }
+    const rate = totalTasks > 0 ? Math.round((done / totalTasks) * 100) : 0;
+    return { totalTasks, done, rate, gameCount: group.items.length };
+  };
+
+  const toggleGroup = (key) => setExpandedGroups((p) => ({ ...p, [key]: !p[key] }));
+
+  const isGroupAllSelected = (group) => group.items.every((r) => selectedRecords.includes(r.id));
+  const toggleGroupSelection = (group) => {
+    const ids = group.items.map((r) => r.id);
+    setSelectedRecords((prev) => {
+      const allSelected = ids.every((id) => prev.includes(id));
+      if (allSelected) return prev.filter((id) => !ids.includes(id));
+      return [...new Set([...prev, ...ids])];
+    });
+  };
+
+  const allRecordIds = records.map((r) => r.id);
+  const allSelected = allRecordIds.length > 0 && allRecordIds.every((id) => selectedRecords.includes(id));
 
   const weeklyData = records.slice(0, 7).reverse().map((r) => ({
     date: format(new Date(r.date), "MM/dd", { locale: zhCN }),
@@ -184,11 +230,11 @@ function HistoryView({ games }) {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#262626] text-left">
-                  <th className="pb-3">
+                  <th className="pb-3 pr-2">
                     <input
                       type="checkbox"
-                      checked={selectedRecords.length === records.length && records.length > 0}
-                      onChange={(e) => setSelectedRecords(e.target.checked ? records.map((r) => r.id) : [])}
+                      checked={allSelected}
+                      onChange={(e) => setSelectedRecords(e.target.checked ? allRecordIds : [])}
                       className="rounded"
                       data-testid="select-all-checkbox"
                     />
@@ -202,23 +248,95 @@ function HistoryView({ games }) {
                 </tr>
               </thead>
               <tbody>
-                {records.map((r) => (
-                  <tr key={r.id} className="border-b border-[#262626] hover:bg-[#0A0A0A]" data-testid={`record-row-${r.id}`}>
-                    <td className="py-3">
-                      <input type="checkbox" checked={selectedRecords.includes(r.id)} onChange={() => toggleRecordSelection(r.id)} className="rounded" data-testid={`record-checkbox-${r.id}`} />
-                    </td>
-                    <td className="py-3 text-neutral-200">{format(new Date(r.date), "yyyy/MM/dd (E)", { locale: zhCN })}</td>
-                    <td className="py-3 text-neutral-400 text-sm">{TYPE_LABELS[r.task_type] || "每日"}</td>
-                    <td className="py-3 text-neutral-300 font-medium">{r.game_name}</td>
-                    <td className="py-3 text-neutral-300"><span className="text-[#39FF14] font-medium">{r.completed_tasks}</span>/{r.total_tasks}</td>
-                    <td className="py-3"><span className="text-[#00F0FF] font-medium">{r.completion_rate}%</span></td>
-                    <td className="py-3">
-                      <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 rounded hover:bg-[#262626] text-[#FF3B30]" title="刪除" data-testid={`delete-record-${r.id}`}>
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {grouped.map((group) => {
+                  const gs = groupStats(group);
+                  const isOpen = !!expandedGroups[group.key];
+                  return (
+                    <>
+                      <tr
+                        key={group.key}
+                        className="border-b border-[#262626] hover:bg-[#0A0A0A] cursor-pointer"
+                        onClick={() => toggleGroup(group.key)}
+                        data-testid={`group-row-${group.key}`}
+                      >
+                        <td className="py-3 pr-2" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isGroupAllSelected(group)}
+                            onChange={() => toggleGroupSelection(group)}
+                            className="rounded"
+                            data-testid={`group-checkbox-${group.key}`}
+                          />
+                        </td>
+                        <td className="py-3 text-neutral-200 flex items-center gap-2">
+                          {isOpen ? <ChevronDown className="w-4 h-4 text-neutral-400" /> : <ChevronRight className="w-4 h-4 text-neutral-400" />}
+                          {format(new Date(group.date), "yyyy/MM/dd (E)", { locale: zhCN })}
+                        </td>
+                        <td className="py-3 text-neutral-400 text-sm">{TYPE_LABELS[group.task_type]}</td>
+                        <td className="py-3 text-neutral-300 font-medium">
+                          <span className="text-neutral-500 text-sm">共 {gs.gameCount} 個遊戲</span>
+                        </td>
+                        <td className="py-3 text-neutral-300">
+                          <span className="text-[#39FF14] font-medium">{gs.done}</span>
+                          <span className="text-neutral-500">/{gs.totalTasks}</span>
+                        </td>
+                        <td className="py-3">
+                          <span className="text-[#00F0FF] font-medium">{gs.rate}%</span>
+                        </td>
+                        <td className="py-3" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`確定要刪除 ${group.items.length} 筆記錄?`)) return;
+                              try {
+                                await axios.delete(`${API}/daily-records/bulk/delete`, { data: group.items.map((r) => r.id) });
+                                toast.success("已刪除整組");
+                                fetchRecords();
+                                fetchStats();
+                              } catch (err) {
+                                toast.error("刪除失敗");
+                              }
+                            }}
+                            className="p-1.5 rounded hover:bg-[#262626] text-[#FF3B30]"
+                            title="刪除整組"
+                            data-testid={`delete-group-${group.key}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                      {isOpen && group.items.map((r) => (
+                        <tr key={r.id} className="border-b border-[#262626]/50 bg-[#0A0A0A]/40 hover:bg-[#0A0A0A]" data-testid={`record-row-${r.id}`}>
+                          <td className="py-2 pr-2 pl-6">
+                            <input
+                              type="checkbox"
+                              checked={selectedRecords.includes(r.id)}
+                              onChange={() => toggleRecordSelection(r.id)}
+                              className="rounded"
+                              data-testid={`record-checkbox-${r.id}`}
+                            />
+                          </td>
+                          <td className="py-2 pl-6 text-neutral-400 text-sm">└</td>
+                          <td className="py-2 text-neutral-500 text-xs">{TYPE_LABELS[r.task_type] || "每日"}</td>
+                          <td className="py-2 text-neutral-300 font-medium">{r.game_name}</td>
+                          <td className="py-2 text-neutral-300">
+                            <span className="text-[#39FF14] font-medium">{r.completed_tasks}</span>/{r.total_tasks}
+                          </td>
+                          <td className="py-2"><span className="text-[#00F0FF] font-medium">{r.completion_rate}%</span></td>
+                          <td className="py-2">
+                            <button
+                              onClick={() => handleDeleteRecord(r.id)}
+                              className="p-1.5 rounded hover:bg-[#262626] text-[#FF3B30]"
+                              title="刪除"
+                              data-testid={`delete-record-${r.id}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  );
+                })}
               </tbody>
             </table>
           </div>

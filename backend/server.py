@@ -23,6 +23,7 @@ api_router = APIRouter(prefix="/api")
 # ===== Models =====
 
 class Task(BaseModel):
+    model_config = ConfigDict(extra="allow")
     id: str
     name: str
     completed: bool = False

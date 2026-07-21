@@ -9,7 +9,7 @@ import HistoryView from "@/components/HistoryView";
 import SettingsView from "@/components/SettingsView";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckSquare, History, Settings } from "lucide-react";
-import { shouldResetGames, checkAndFireReminders } from "@/utils/reminders";
+import { shouldResetGames, checkAndFireReminders, computePerTaskResets } from "@/utils/reminders";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -43,7 +43,6 @@ function App() {
       const res = await axios.get(`${API}/games`);
       const current = res.data;
       const toReset = shouldResetGames(current);
-      if (toReset.length === 0) return;
 
       const notified = [];
       for (const item of toReset) {
@@ -58,6 +57,21 @@ function App() {
           console.error("Reset failed:", err);
         }
       }
+
+      // Per-task resets (weekly override + version cycle)
+      const perTask = computePerTaskResets(current);
+      for (const patch of perTask) {
+        try {
+          const body = {};
+          if (patch.weekly_tasks) body.weekly_tasks = patch.weekly_tasks;
+          if (patch.version_tasks) body.version_tasks = patch.version_tasks;
+          await axios.put(`${API}/games/${patch.gameId}`, body);
+          notified.push(`${patch.gameName} - 個別任務`);
+        } catch (err) {
+          console.error("Per-task reset failed:", err);
+        }
+      }
+
       if (notified.length > 0) {
         toast.success(`已自動重置: ${notified.join(", ")}`);
         fetchGames();

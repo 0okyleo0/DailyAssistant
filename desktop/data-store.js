@@ -22,7 +22,7 @@ function ensureGameShape(g) {
     weekly_reset_time: g.weekly_reset_time || '00:00',
     weekly_last_reset_date: g.weekly_last_reset_date || '',
     weekly_reminder_minutes: g.weekly_reminder_minutes ?? 0,
-    // Version
+    // Version (per-task deadlines; game-level version_deadline retained for legacy migration only)
     version_tasks: g.version_tasks || [],
     version_deadline: g.version_deadline || '',
     version_reminder_minutes: g.version_reminder_minutes ?? 0,

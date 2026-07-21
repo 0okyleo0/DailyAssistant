@@ -12,37 +12,43 @@ import axios from "axios";
 import { launchGame, copyGamePath } from "@/utils/launcher";
 import { TIME_OPTIONS, WEEKDAY_OPTIONS } from "@/utils/timeOptions";
 import { ReminderInput } from "@/components/ReminderInput";
-import { DateTimePicker } from "@/components/DateTimePicker";
+import { WeeklyTaskSettings, VersionTaskSettings } from "@/components/TaskSettings";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 const emptyTask = () => ({ id: Date.now().toString() + Math.random().toString(36).slice(2, 5), name: "" });
 
-function TaskListEditor({ tasks, setTasks, testIdPrefix }) {
+function TaskListEditor({ tasks, setTasks, testIdPrefix, renderExtra }) {
+  const updateTask = (id, patch) => {
+    setTasks(tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  };
   return (
     <div className="space-y-2">
       {tasks.map((task, index) => (
-        <div key={task.id} className="flex gap-2">
-          <Input
-            value={task.name}
-            onChange={(e) => setTasks(tasks.map((t) => (t.id === task.id ? { ...t, name: e.target.value } : t)))}
-            className="bg-[#0A0A0A] border-[#262626] text-white flex-1"
-            placeholder={`任務 ${index + 1}`}
-            data-testid={`${testIdPrefix}-input-${index}`}
-          />
-          {tasks.length > 1 && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setTasks(tasks.filter((t) => t.id !== task.id))}
-              className="text-[#FF3B30] hover:text-[#FF3B30] hover:bg-[#FF3B30]/10"
-              data-testid={`${testIdPrefix}-remove-${index}`}
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          )}
+        <div key={task.id} className="space-y-1">
+          <div className="flex gap-2">
+            <Input
+              value={task.name}
+              onChange={(e) => updateTask(task.id, { name: e.target.value })}
+              className="bg-[#0A0A0A] border-[#262626] text-white flex-1"
+              placeholder={`任務 ${index + 1}`}
+              data-testid={`${testIdPrefix}-input-${index}`}
+            />
+            {tasks.length > 1 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setTasks(tasks.filter((t) => t.id !== task.id))}
+                className="text-[#FF3B30] hover:text-[#FF3B30] hover:bg-[#FF3B30]/10"
+                data-testid={`${testIdPrefix}-remove-${index}`}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+          {renderExtra && renderExtra(task, (patch) => updateTask(task.id, patch), index)}
         </div>
       ))}
       <Button
@@ -78,7 +84,6 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
   const [weeklyReminder, setWeeklyReminder] = useState(0);
 
   const [versionTasks, setVersionTasks] = useState([emptyTask()]);
-  const [versionDeadline, setVersionDeadline] = useState("");
   const [versionReminder, setVersionReminder] = useState(0);
 
   const resetForm = () => {
@@ -92,13 +97,16 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
     setWeeklyResetTime("00:00");
     setWeeklyReminder(0);
     setVersionTasks([emptyTask()]);
-    setVersionDeadline("");
     setVersionReminder(0);
     setEditingGame(null);
     setTab("basic");
   };
 
-  const validTasks = (arr) => arr.filter((t) => t.name.trim()).map((t) => ({ id: t.id, name: t.name.trim(), completed: false }));
+  // Preserve any per-task fields (reset_day/time overrides, deadline_type, etc.) on save
+  const validTasks = (arr) =>
+    arr
+      .filter((t) => t.name.trim())
+      .map((t) => ({ ...t, name: t.name.trim(), completed: !!t.completed }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -119,7 +127,6 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
       weekly_reset_time: weeklyResetTime,
       weekly_reminder_minutes: Number(weeklyReminder),
       version_tasks: validTasks(versionTasks),
-      version_deadline: versionDeadline,
       version_reminder_minutes: Number(versionReminder),
     };
 
@@ -152,7 +159,6 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
     setWeeklyResetTime(game.weekly_reset_time || "00:00");
     setWeeklyReminder(game.weekly_reminder_minutes || 0);
     setVersionTasks((game.version_tasks || []).length > 0 ? game.version_tasks : [emptyTask()]);
-    setVersionDeadline(game.version_deadline || "");
     setVersionReminder(game.version_reminder_minutes || 0);
     setDialogOpen(true);
   };
@@ -278,22 +284,25 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                         />
                       </div>
                       <div>
-                        <Label className="text-neutral-400">每周任務清單</Label>
-                        <TaskListEditor tasks={weeklyTasks} setTasks={setWeeklyTasks} testIdPrefix="weekly-task" />
+                        <Label className="text-neutral-400">每周任務清單 <span className="text-xs text-neutral-500">(每筆可自訂重置時間)</span></Label>
+                        <TaskListEditor
+                          tasks={weeklyTasks}
+                          setTasks={setWeeklyTasks}
+                          testIdPrefix="weekly-task"
+                          renderExtra={(task, patch, index) => (
+                            <WeeklyTaskSettings
+                              task={task}
+                              onChange={patch}
+                              testIdPrefix={`weekly-task-settings-${index}`}
+                            />
+                          )}
+                        />
                       </div>
                     </TabsContent>
 
                     <TabsContent value="version" className="space-y-4 mt-4">
                       <div>
-                        <Label className="text-neutral-400">到期時間</Label>
-                        <DateTimePicker
-                          value={versionDeadline}
-                          onChange={setVersionDeadline}
-                          testIdPrefix="version-deadline"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-neutral-400">提醒</Label>
+                        <Label className="text-neutral-400">提醒 <span className="text-xs text-neutral-500">(適用所有版本任務)</span></Label>
                         <ReminderInput
                           value={versionReminder}
                           onChange={setVersionReminder}
@@ -302,8 +311,19 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                         />
                       </div>
                       <div>
-                        <Label className="text-neutral-400">版本任務清單</Label>
-                        <TaskListEditor tasks={versionTasks} setTasks={setVersionTasks} testIdPrefix="version-task" />
+                        <Label className="text-neutral-400">版本任務清單 <span className="text-xs text-neutral-500">(每筆獨立到期時間 + 循環)</span></Label>
+                        <TaskListEditor
+                          tasks={versionTasks}
+                          setTasks={setVersionTasks}
+                          testIdPrefix="version-task"
+                          renderExtra={(task, patch, index) => (
+                            <VersionTaskSettings
+                              task={task}
+                              onChange={patch}
+                              testIdPrefix={`version-task-settings-${index}`}
+                            />
+                          )}
+                        />
                       </div>
                     </TabsContent>
                   </Tabs>

@@ -1,21 +1,27 @@
 import { toast } from "sonner";
-import { nextDailyResetDate, nextWeeklyResetDate, parseVersionDeadline } from "./timeOptions";
+import {
+  nextDailyResetDate,
+  computeWeeklyTaskReset,
+  computeVersionTaskDeadline,
+  formatMinutes,
+} from "./timeOptions";
 
 // Track fired reminders to avoid duplicates (keyed by "gameId:type:targetTimestamp")
 const firedReminders = new Set();
 
-function keyFor(gameId, type, targetTs) {
-  return `${gameId}:${type}:${targetTs}`;
+function keyFor(gameId, type, targetTs, taskId = "") {
+  return `${gameId}:${type}:${taskId}:${targetTs}`;
 }
 
 /**
  * Build the list of upcoming reminders from games.
- * Returns array of { gameId, gameName, type, targetTime, reminderTime, minutesBefore }
+ * Weekly/Version reminders are computed per-task (each task may have own reset/deadline).
+ * Daily reminders remain game-level.
  */
 export function buildReminderList(games, now = new Date()) {
   const reminders = [];
   for (const game of games) {
-    // Daily
+    // Daily (game-level)
     if (game.daily_reminder_minutes > 0 && (game.tasks || []).length > 0) {
       const target = nextDailyResetDate(game.reset_time, now);
       const reminderTime = new Date(target.getTime() - game.daily_reminder_minutes * 60000);
@@ -29,28 +35,36 @@ export function buildReminderList(games, now = new Date()) {
         minutesBefore: game.daily_reminder_minutes,
       });
     }
-    // Weekly
-    if (game.weekly_reminder_minutes > 0 && (game.weekly_tasks || []).length > 0) {
-      const target = nextWeeklyResetDate(game.weekly_reset_day, game.weekly_reset_time, now);
-      const reminderTime = new Date(target.getTime() - game.weekly_reminder_minutes * 60000);
-      reminders.push({
-        gameId: game.id,
-        gameName: game.name,
-        type: "weekly",
-        typeLabel: "每周任務",
-        targetTime: target,
-        reminderTime,
-        minutesBefore: game.weekly_reminder_minutes,
-      });
+    // Weekly (per-task, reminder mins still game-level)
+    if (game.weekly_reminder_minutes > 0) {
+      for (const task of (game.weekly_tasks || [])) {
+        const target = computeWeeklyTaskReset(task, game, now);
+        if (!target) continue;
+        const reminderTime = new Date(target.getTime() - game.weekly_reminder_minutes * 60000);
+        reminders.push({
+          gameId: game.id,
+          gameName: game.name,
+          taskId: task.id,
+          taskName: task.name,
+          type: "weekly",
+          typeLabel: "每周任務",
+          targetTime: target,
+          reminderTime,
+          minutesBefore: game.weekly_reminder_minutes,
+        });
+      }
     }
-    // Version
-    if (game.version_reminder_minutes > 0 && game.version_deadline && !game.version_archived && (game.version_tasks || []).length > 0) {
-      const target = parseVersionDeadline(game.version_deadline);
-      if (target && target > now) {
+    // Version (per-task deadlines)
+    if (game.version_reminder_minutes > 0 && !game.version_archived) {
+      for (const task of (game.version_tasks || [])) {
+        const target = computeVersionTaskDeadline(task, now);
+        if (!target || target <= now) continue;
         const reminderTime = new Date(target.getTime() - game.version_reminder_minutes * 60000);
         reminders.push({
           gameId: game.id,
           gameName: game.name,
+          taskId: task.id,
+          taskName: task.name,
           type: "version",
           typeLabel: "版本任務",
           targetTime: target,
@@ -77,13 +91,11 @@ export function checkAndFireReminders(games, options = {}) {
   // Group by minute-precision reminder time
   const groups = new Map();
   for (const r of reminders) {
-    // Match if reminder time is within +/- 30 seconds of now (i.e., same minute)
     const diffMs = Math.abs(r.reminderTime.getTime() - now.getTime());
     if (diffMs > 30_000) continue;
 
-    // Truncate to minute for deduplication
     const bucket = Math.floor(r.reminderTime.getTime() / 60000) * 60000;
-    const k = keyFor(r.gameId, r.type, bucket);
+    const k = keyFor(r.gameId, r.type, bucket, r.taskId || "");
     if (firedReminders.has(k)) continue;
     firedReminders.add(k);
 
@@ -105,21 +117,7 @@ export function checkAndFireReminders(games, options = {}) {
   }
 }
 
-function formatMinutes(totalMinutes) {
-  const m = Math.max(0, Math.round(Number(totalMinutes) || 0));
-  const days = Math.floor(m / 1440);
-  const hours = Math.floor((m % 1440) / 60);
-  const minutes = m % 60;
-  const parts = [];
-  if (days > 0) parts.push(`${days} 天`);
-  if (hours > 0) parts.push(`${hours} 小時`);
-  if (minutes > 0) parts.push(`${minutes} 分鐘`);
-  if (parts.length === 0) parts.push("0 分鐘");
-  return parts.join(" ") + "後";
-}
-
 function fireNotification(group, useElectron) {
-  // Use type-specific title. If multiple types in same group, fallback to combined.
   const types = [...new Set(group.map((r) => r.type))];
   let title;
   if (types.length === 1) {
@@ -130,13 +128,11 @@ function fireNotification(group, useElectron) {
   }
 
   const body = group
-    .map((r) => `• ${r.gameName} - ${r.typeLabel} (${formatMinutes(r.minutesBefore)})`)
+    .map((r) => `• ${r.gameName}${r.taskName ? ` - ${r.taskName}` : ` - ${r.typeLabel}`} (${formatMinutes(r.minutesBefore)})`)
     .join("\n");
 
-  // Toast
   toast(title, { description: body, duration: 8000 });
 
-  // OS notification (via Electron IPC or browser Notification API)
   if (useElectron && typeof window !== "undefined" && window.electronAPI?.showNotification) {
     window.electronAPI.showNotification({ title, body });
   } else if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
@@ -166,7 +162,7 @@ export function shouldResetGames(games, now = new Date()) {
         toReset.push({ gameId: game.id, gameName: game.name, type: "daily" });
       }
     }
-    // Weekly
+    // Weekly (game-level; only for tasks WITHOUT per-task override)
     if ((game.weekly_tasks || []).length > 0 && game.weekly_reset_time) {
       const [h, m] = game.weekly_reset_time.split(":").map(Number);
       const target = new Date(now);
@@ -178,4 +174,61 @@ export function shouldResetGames(games, now = new Date()) {
     }
   }
   return toReset;
+}
+
+/**
+ * For each game, compute per-task updates (uncheck + advance) for:
+ *  - Weekly tasks with per-task override whose target has passed since last_reset_at
+ *  - Version tasks with cycle_enabled whose next_deadline_at has passed
+ * Returns array of { gameId, weekly_tasks?, version_tasks? } patches for the API.
+ */
+export function computePerTaskResets(games, now = new Date()) {
+  const patches = [];
+  for (const game of games) {
+    let weeklyChanged = false;
+    let versionChanged = false;
+
+    const newWeekly = (game.weekly_tasks || []).map((t) => {
+      const hasOverride = t.reset_day !== undefined || t.reset_time !== undefined;
+      if (!hasOverride) return t;
+      const day = t.reset_day ?? game.weekly_reset_day ?? 1;
+      const timeStr = t.reset_time || game.weekly_reset_time || "00:00";
+      const [h, m] = timeStr.split(":").map(Number);
+      // "prev" reset target is the most recent past occurrence of (day at time)
+      const prev = new Date(now);
+      prev.setHours(h || 0, m || 0, 0, 0);
+      const dow = prev.getDay();
+      let delta = (dow - Number(day) + 7) % 7;
+      if (delta === 0 && prev > now) delta = 7;
+      prev.setDate(prev.getDate() - delta);
+      const lastResetAt = t.last_reset_at ? new Date(t.last_reset_at) : null;
+      if (now >= prev && (!lastResetAt || lastResetAt < prev)) {
+        weeklyChanged = true;
+        return { ...t, completed: false, last_reset_at: now.toISOString() };
+      }
+      return t;
+    });
+
+    const newVersion = (game.version_tasks || []).map((t) => {
+      if (!t.cycle_enabled || t.deadline_type !== "days" || !t.next_deadline_at) return t;
+      const original = new Date(t.next_deadline_at);
+      if (isNaN(original.getTime()) || original > now) return t;
+      const days = Number(t.deadline_days) || 0;
+      if (days <= 0) return t;
+      let advanced = original;
+      while (advanced <= now) {
+        advanced = new Date(advanced.getTime() + days * 86400000);
+      }
+      versionChanged = true;
+      return { ...t, completed: false, next_deadline_at: advanced.toISOString() };
+    });
+
+    if (weeklyChanged || versionChanged) {
+      const patch = { gameId: game.id, gameName: game.name };
+      if (weeklyChanged) patch.weekly_tasks = newWeekly;
+      if (versionChanged) patch.version_tasks = newVersion;
+      patches.push(patch);
+    }
+  }
+  return patches;
 }
