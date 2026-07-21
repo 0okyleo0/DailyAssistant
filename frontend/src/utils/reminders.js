@@ -105,6 +105,19 @@ export function checkAndFireReminders(games, options = {}) {
   }
 }
 
+function formatMinutes(totalMinutes) {
+  const m = Math.max(0, Math.round(Number(totalMinutes) || 0));
+  const days = Math.floor(m / 1440);
+  const hours = Math.floor((m % 1440) / 60);
+  const minutes = m % 60;
+  const parts = [];
+  if (days > 0) parts.push(`${days} 天`);
+  if (hours > 0) parts.push(`${hours} 小時`);
+  if (minutes > 0) parts.push(`${minutes} 分鐘`);
+  if (parts.length === 0) parts.push("0 分鐘");
+  return parts.join(" ") + "後";
+}
+
 function fireNotification(group, useElectron) {
   // Use type-specific title. If multiple types in same group, fallback to combined.
   const types = [...new Set(group.map((r) => r.type))];
@@ -117,7 +130,7 @@ function fireNotification(group, useElectron) {
   }
 
   const body = group
-    .map((r) => `• ${r.gameName} - ${r.typeLabel} (${r.minutesBefore} 分鐘後)`)
+    .map((r) => `• ${r.gameName} - ${r.typeLabel} (${formatMinutes(r.minutesBefore)})`)
     .join("\n");
 
   // Toast
