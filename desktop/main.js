@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, Notification, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Notification, dialog, globalShortcut } = require('electron');
 const path = require('path');
 const dataStore = require('./data-store');
 const { launchGame } = require('./game-launcher');
@@ -96,6 +96,25 @@ app.whenReady().then(() => {
 
   ipcMain.handle('launch-game', async (event, gamePath) => {
     return await launchGame(gamePath);
+  });
+
+  ipcMain.handle('select-game-file', async () => {
+    const filters = process.platform === 'win32'
+      ? [
+          { name: '執行檔 / 捷徑', extensions: ['exe', 'lnk', 'bat', 'cmd'] },
+          { name: '所有檔案', extensions: ['*'] },
+        ]
+      : [
+          { name: 'Applications', extensions: ['app', 'sh', 'AppImage'] },
+          { name: 'All Files', extensions: ['*'] },
+        ];
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: '選擇遊戲檔案',
+      properties: ['openFile'],
+      filters,
+    });
+    if (result.canceled || !result.filePaths?.[0]) return { canceled: true };
+    return { canceled: false, path: result.filePaths[0] };
   });
 
   ipcMain.handle('show-notification', (event, { title, body }) => {

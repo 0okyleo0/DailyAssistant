@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Copy, Trash2, Edit2, Menu, X, Clock, Rocket } from "lucide-react";
+import { Plus, Copy, Trash2, Edit2, Menu, X, Clock, Rocket, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,6 +70,22 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGame, setEditingGame] = useState(null);
   const [tab, setTab] = useState("basic");
+  const isElectron = typeof window !== "undefined" && !!window.electronAPI;
+
+  const handleBrowseFile = async () => {
+    if (!isElectron) {
+      toast.info("網頁預覽版無法呼叫檔案總管，請手動輸入路徑（桌面版即可用瀏覽）");
+      return;
+    }
+    try {
+      const result = await window.electronAPI.selectGameFile();
+      if (result && !result.canceled && result.path) {
+        setGpath(result.path);
+      }
+    } catch (err) {
+      toast.error("選取檔案失敗: " + (err?.message || "未知錯誤"));
+    }
+  };
 
   const [name, setName] = useState("");
   const [gpath, setGpath] = useState("");
@@ -240,7 +256,20 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                       </div>
                       <div>
                         <Label className="text-neutral-400">遊戲檔案路徑</Label>
-                        <Input value={gpath} onChange={(e) => setGpath(e.target.value)} className="bg-[#0A0A0A] border-[#262626] text-white" placeholder="C:\Games\game.exe" data-testid="game-path-input" />
+                        <div className="flex gap-2">
+                          <Input value={gpath} onChange={(e) => setGpath(e.target.value)} className="bg-[#0A0A0A] border-[#262626] text-white flex-1" placeholder="C:\Games\game.exe" data-testid="game-path-input" />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleBrowseFile}
+                            className="border-[#262626] text-neutral-300 hover:text-white shrink-0"
+                            title={isElectron ? "選擇檔案" : "僅桌面版可用"}
+                            data-testid="browse-file-button"
+                          >
+                            <FolderOpen className="w-4 h-4 mr-1" />
+                            瀏覽
+                          </Button>
+                        </div>
                       </div>
                     </TabsContent>
 

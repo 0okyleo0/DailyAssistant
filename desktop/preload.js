@@ -6,6 +6,7 @@ try {
     request: (req) => ipcRenderer.invoke('api-request', req),
     launchGame: (gamePath) => ipcRenderer.invoke('launch-game', gamePath),
     showNotification: (payload) => ipcRenderer.invoke('show-notification', payload),
+    selectGameFile: () => ipcRenderer.invoke('select-game-file'),
   });
   console.log('[Preload] electronAPI exposed successfully');
 } catch (err) {
