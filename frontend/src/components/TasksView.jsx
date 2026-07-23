@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Copy, CheckCircle2, Circle, Clock, Rocket, Calendar, Archive, Repeat, CalendarDays } from "lucide-react";
+import { Copy, CheckCircle2, Circle, Clock, Rocket, Calendar, Archive, Repeat, CalendarDays, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -23,6 +23,14 @@ const FIELDS = {
   weekly: { tasks: "weekly_tasks", label: "每周任務" },
   monthly: { tasks: "monthly_tasks", label: "每月任務" },
   version: { tasks: "version_tasks", label: "版本任務" },
+};
+
+// Red-highlight thresholds (minutes) per task type
+const DUE_SOON_THRESHOLDS = {
+  daily: 60,       // < 1 hour
+  weekly: 1440,    // < 1 day
+  monthly: 4320,   // < 3 days
+  version: 4320,   // < 3 days
 };
 
 // Format a Date as "YYYY/MM/DD HH:MM"
@@ -94,6 +102,7 @@ function TasksView({ games, onGamesChange, settings }) {
   };
 
   // Compute a task's next target time. Returns { target, minutesLeft, dueSoon }.
+  // Completed tasks do NOT get red highlight until unchecked.
   const taskTiming = (game, task, type) => {
     let target = null;
     if (type === "daily") target = computeDailyReset(game, now);
@@ -102,12 +111,14 @@ function TasksView({ games, onGamesChange, settings }) {
     else if (type === "version") target = computeVersionTaskDeadline(task, now);
     if (!target) return { target: null, minutesLeft: null, dueSoon: false };
     const minutesLeft = Math.max(0, Math.round((target - now) / 60000));
-    const dueSoon = type !== "daily" && minutesLeft <= 1440; // <24h and not daily
+    const threshold = DUE_SOON_THRESHOLDS[type] ?? 1440;
+    const dueSoon = !task?.completed && minutesLeft <= threshold;
     return { target, minutesLeft, dueSoon };
   };
 
   const renderTaskRow = (game, task, type) => {
     const timing = taskTiming(game, task, type);
+    // Show inline timing for weekly/monthly/version (daily uses game-level subtitle)
     const showTiming = type !== "daily" && timing.target;
     return (
       <div
@@ -154,20 +165,24 @@ function TasksView({ games, onGamesChange, settings }) {
     if (type === "daily") {
       const daily = taskTiming(game, {}, "daily");
       if (daily.target) {
+        // Red if any uncompleted daily task and minsLeft <= threshold
+        const hasIncomplete = tasks.some((t) => !t.completed);
+        dueSoon = hasIncomplete && daily.minutesLeft <= DUE_SOON_THRESHOLDS.daily;
         subtitle = `每日 ${game.reset_time || "00:00"} 重置 · ${formatMinutes(daily.minutesLeft)}`;
       } else {
         subtitle = `每日 ${game.reset_time || "00:00"} 重置`;
       }
     } else if (type === "weekly") {
-      // Use the soonest task; if none, fall back to game defaults
+      // Use the soonest UNCOMPLETED task; if none, fall back to game defaults
       let earliest = null;
       for (const t of tasks) {
+        if (t.completed) continue;
         const dt = computeWeeklyTaskReset(t, game, now);
         if (dt && (!earliest || dt < earliest)) earliest = dt;
       }
       if (earliest) {
         const mins = Math.max(0, Math.round((earliest - now) / 60000));
-        dueSoon = mins <= 1440;
+        dueSoon = mins <= DUE_SOON_THRESHOLDS.weekly;
         subtitle = `最快重置: ${fmtDateTime(earliest)} · ${formatMinutes(mins)}`;
       } else {
         subtitle = `${weekdayLabel(game.weekly_reset_day)} ${game.weekly_reset_time || "00:00"} 預設重置`;
@@ -175,12 +190,13 @@ function TasksView({ games, onGamesChange, settings }) {
     } else if (type === "monthly") {
       let earliest = null;
       for (const t of tasks) {
+        if (t.completed) continue;
         const dt = computeMonthlyTaskReset(t, game, now);
         if (dt && (!earliest || dt < earliest)) earliest = dt;
       }
       if (earliest) {
         const mins = Math.max(0, Math.round((earliest - now) / 60000));
-        dueSoon = mins <= 1440;
+        dueSoon = mins <= DUE_SOON_THRESHOLDS.monthly;
         subtitle = `最快重置: ${fmtDateTime(earliest)} · ${formatMinutes(mins)}`;
       } else {
         subtitle = `${monthDayLabel(game.monthly_reset_day)} ${game.monthly_reset_time || "00:00"} 預設重置`;
@@ -189,12 +205,13 @@ function TasksView({ games, onGamesChange, settings }) {
       // version
       let earliest = null;
       for (const t of tasks) {
+        if (t.completed) continue;
         const dt = computeVersionTaskDeadline(t, now);
         if (dt && (!earliest || dt < earliest)) earliest = dt;
       }
       if (earliest) {
         const mins = Math.max(0, Math.round((earliest - now) / 60000));
-        dueSoon = mins <= 1440;
+        dueSoon = mins <= DUE_SOON_THRESHOLDS.version;
         subtitle = `最快到期: ${fmtDateTime(earliest)} · ${formatMinutes(mins)}`;
       } else {
         subtitle = "未設定到期時間";
@@ -244,8 +261,92 @@ function TasksView({ games, onGamesChange, settings }) {
   const monthly = statsFor("monthly");
   const version = statsFor("version");
 
+  // Build "即將到期" list: all uncompleted tasks whose minutesLeft <= threshold
+  const upcomingTasks = (() => {
+    const items = [];
+    for (const game of games) {
+      const walk = (arr, type) => {
+        for (const t of arr || []) {
+          if (t.completed) continue;
+          const timing = taskTiming(game, t, type);
+          if (!timing.target) continue;
+          if (timing.minutesLeft <= (DUE_SOON_THRESHOLDS[type] ?? 1440)) {
+            items.push({
+              gameId: game.id,
+              gameName: game.name,
+              taskId: t.id,
+              taskName: t.name,
+              type,
+              typeLabel: FIELDS[type].label,
+              target: timing.target,
+              minutesLeft: timing.minutesLeft,
+            });
+          }
+        }
+      };
+      walk(game.tasks, "daily");
+      walk(game.weekly_tasks, "weekly");
+      walk(game.monthly_tasks, "monthly");
+      walk(game.version_tasks, "version");
+    }
+    items.sort((a, b) => a.minutesLeft - b.minutesLeft);
+    return items;
+  })();
+
+  const typeTintClass = {
+    daily: "text-[#00F0FF]",
+    weekly: "text-[#39FF14]",
+    monthly: "text-[#B388FF]",
+    version: "text-[#FFB800]",
+  };
+
   return (
     <div className="space-y-6" data-testid="tasks-view">
+      {/* 即將到期 - prominent alert block */}
+      {upcomingTasks.length > 0 && (
+        <div
+          className="p-5 rounded-lg bg-gradient-to-r from-[#FF3B30]/15 via-[#FF3B30]/10 to-transparent border-2 border-[#FF3B30]/60 shadow-[0_0_20px_rgba(255,59,48,0.15)]"
+          data-testid="upcoming-tasks-panel"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-5 h-5 text-[#FF3B30] animate-pulse" />
+            <h3 className="text-lg font-bold text-[#FF3B30] tracking-wide">
+              即將到期 <span className="text-sm font-normal text-neutral-300">({upcomingTasks.length} 項)</span>
+            </h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {upcomingTasks.slice(0, 12).map((u) => (
+              <div
+                key={`${u.gameId}-${u.type}-${u.taskId}`}
+                onClick={() => handleToggleTask(u.gameId, u.taskId, false, u.type)}
+                className="group p-3 rounded-md bg-[#0A0A0A]/80 border border-[#262626] hover:border-[#FF3B30]/60 cursor-pointer transition-colors"
+                data-testid={`upcoming-item-${u.taskId}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs font-bold tracking-wider uppercase ${typeTintClass[u.type]}`}>
+                        {u.typeLabel.replace("任務", "")}
+                      </span>
+                      <span className="text-xs text-neutral-500 truncate">{u.gameName}</span>
+                    </div>
+                    <div className="text-sm text-neutral-100 truncate">{u.taskName}</div>
+                  </div>
+                  <span className="text-xs text-[#FF3B30] font-semibold whitespace-nowrap">
+                    {formatMinutes(u.minutesLeft)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {upcomingTasks.length > 12 && (
+            <div className="mt-2 text-xs text-neutral-400 text-center">
+              另有 {upcomingTasks.length - 12} 項未顯示，切換各類型分頁查看完整清單
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { key: "daily", label: "每日", stat: daily, color: "text-[#00F0FF]" },
