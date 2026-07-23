@@ -2,6 +2,8 @@ import { toast } from "sonner";
 import {
   nextDailyResetDate,
   computeWeeklyTaskReset,
+  computeMonthlyTaskReset,
+  nextMonthlyResetDate,
   computeVersionTaskDeadline,
   formatMinutes,
 } from "./timeOptions";
@@ -51,6 +53,25 @@ export function buildReminderList(games, now = new Date()) {
           targetTime: target,
           reminderTime,
           minutesBefore: game.weekly_reminder_minutes,
+        });
+      }
+    }
+    // Monthly (per-task)
+    if (game.monthly_reminder_minutes > 0) {
+      for (const task of (game.monthly_tasks || [])) {
+        const target = computeMonthlyTaskReset(task, game, now);
+        if (!target) continue;
+        const reminderTime = new Date(target.getTime() - game.monthly_reminder_minutes * 60000);
+        reminders.push({
+          gameId: game.id,
+          gameName: game.name,
+          taskId: task.id,
+          taskName: task.name,
+          type: "monthly",
+          typeLabel: "每月任務",
+          targetTime: target,
+          reminderTime,
+          minutesBefore: game.monthly_reminder_minutes,
         });
       }
     }
@@ -121,7 +142,10 @@ function fireNotification(group, useElectron) {
   const types = [...new Set(group.map((r) => r.type))];
   let title;
   if (types.length === 1) {
-    const label = types[0] === "daily" ? "每日" : types[0] === "weekly" ? "每周" : "版本";
+    const label =
+      types[0] === "daily" ? "每日" :
+      types[0] === "weekly" ? "每周" :
+      types[0] === "monthly" ? "每月" : "版本";
     title = `${label}任務到期提醒`;
   } else {
     title = "任務到期提醒";
@@ -172,6 +196,26 @@ export function shouldResetGames(games, now = new Date()) {
         toReset.push({ gameId: game.id, gameName: game.name, type: "weekly" });
       }
     }
+    // Monthly (game-level; only for tasks WITHOUT per-task override)
+    if ((game.monthly_tasks || []).length > 0 && game.monthly_reset_time) {
+      const target = nextMonthlyResetDate(game.monthly_reset_day, game.monthly_reset_time, new Date(now.getTime() - 86400000));
+      // target is the most recent past occurrence (or today if not yet reached)
+      const past = new Date(target);
+      // Recompute: get the "prev" monthly occurrence
+      const prev = nextMonthlyResetDate(game.monthly_reset_day, game.monthly_reset_time, new Date(now.getTime() - 86400000 * 32));
+      if (now >= prev && game.monthly_last_reset_date !== today) {
+        // Only trigger if prev was in the current cycle window
+        // Simpler check: if today matches reset_day (or last-day) AND time reached
+        const [h2, m2] = game.monthly_reset_time.split(":").map(Number);
+        const todayReset = new Date(now);
+        todayReset.setHours(h2 || 0, m2 || 0, 0, 0);
+        const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const targetDay = String(game.monthly_reset_day) === "last" ? lastDayOfMonth : Math.min(Number(game.monthly_reset_day) || 1, lastDayOfMonth);
+        if (now.getDate() === targetDay && now >= todayReset) {
+          toReset.push({ gameId: game.id, gameName: game.name, type: "monthly" });
+        }
+      }
+    }
   }
   return toReset;
 }
@@ -186,6 +230,7 @@ export function computePerTaskResets(games, now = new Date()) {
   const patches = [];
   for (const game of games) {
     let weeklyChanged = false;
+    let monthlyChanged = false;
     let versionChanged = false;
 
     const newWeekly = (game.weekly_tasks || []).map((t) => {
@@ -194,7 +239,6 @@ export function computePerTaskResets(games, now = new Date()) {
       const day = t.reset_day ?? game.weekly_reset_day ?? 1;
       const timeStr = t.reset_time || game.weekly_reset_time || "00:00";
       const [h, m] = timeStr.split(":").map(Number);
-      // "prev" reset target is the most recent past occurrence of (day at time)
       const prev = new Date(now);
       prev.setHours(h || 0, m || 0, 0, 0);
       const dow = prev.getDay();
@@ -204,6 +248,28 @@ export function computePerTaskResets(games, now = new Date()) {
       const lastResetAt = t.last_reset_at ? new Date(t.last_reset_at) : null;
       if (now >= prev && (!lastResetAt || lastResetAt < prev)) {
         weeklyChanged = true;
+        return { ...t, completed: false, last_reset_at: now.toISOString() };
+      }
+      return t;
+    });
+
+    const newMonthly = (game.monthly_tasks || []).map((t) => {
+      const hasOverride = t.reset_day !== undefined || t.reset_time !== undefined;
+      if (!hasOverride) return t;
+      // Compute previous monthly reset target
+      const timeStr = t.reset_time || game.monthly_reset_time || "00:00";
+      const day = t.reset_day ?? game.monthly_reset_day ?? 1;
+      // "prev" = most recent past occurrence
+      let prev = nextMonthlyResetDate(day, timeStr, new Date(now.getTime() - 86400000 * 32));
+      // Walk forward until next is > now, keeping the last that is <= now
+      while (true) {
+        const next = nextMonthlyResetDate(day, timeStr, new Date(prev.getTime() + 60000));
+        if (next > now) break;
+        prev = next;
+      }
+      const lastResetAt = t.last_reset_at ? new Date(t.last_reset_at) : null;
+      if (now >= prev && (!lastResetAt || lastResetAt < prev)) {
+        monthlyChanged = true;
         return { ...t, completed: false, last_reset_at: now.toISOString() };
       }
       return t;
@@ -223,9 +289,10 @@ export function computePerTaskResets(games, now = new Date()) {
       return { ...t, completed: false, next_deadline_at: advanced.toISOString() };
     });
 
-    if (weeklyChanged || versionChanged) {
+    if (weeklyChanged || monthlyChanged || versionChanged) {
       const patch = { gameId: game.id, gameName: game.name };
       if (weeklyChanged) patch.weekly_tasks = newWeekly;
+      if (monthlyChanged) patch.monthly_tasks = newMonthly;
       if (versionChanged) patch.version_tasks = newVersion;
       patches.push(patch);
     }

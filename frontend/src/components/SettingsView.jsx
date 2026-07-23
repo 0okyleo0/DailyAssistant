@@ -4,17 +4,27 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import axios from "axios";
-import { Bell, Save, Info, Download, Upload, Rocket, HelpCircle, Copy, Database } from "lucide-react";
+import { Bell, Save, Info, Download, Upload, Rocket, HelpCircle, Copy, Database, Trash2 } from "lucide-react";
 import { downloadRegFile, generateRegFile } from "@/utils/launcher";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const RETENTION_OPTIONS = [
+  { value: 0, label: "不自動刪除" },
+  { value: 30, label: "30 天" },
+  { value: 90, label: "90 天" },
+  { value: 180, label: "180 天" },
+  { value: 365, label: "365 天" },
+];
+
 function SettingsView({ settings, onSettingsChange, onDataChange }) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [customProtocol, setCustomProtocol] = useState("gamelauncher");
+  const [historyRetentionDays, setHistoryRetentionDays] = useState(0);
   const [saving, setSaving] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const fileInputRef = useRef(null);
@@ -24,6 +34,7 @@ function SettingsView({ settings, onSettingsChange, onDataChange }) {
     if (settings) {
       setNotificationsEnabled(settings.notifications_enabled || false);
       setCustomProtocol(settings.custom_protocol || "gamelauncher");
+      setHistoryRetentionDays(Number(settings.history_retention_days) || 0);
     }
   }, [settings]);
 
@@ -37,6 +48,7 @@ function SettingsView({ settings, onSettingsChange, onDataChange }) {
       await axios.put(`${API}/settings`, {
         notifications_enabled: notificationsEnabled,
         custom_protocol: customProtocol.toLowerCase(),
+        history_retention_days: Number(historyRetentionDays) || 0,
       });
       toast.success("設定已儲存");
       onSettingsChange();
@@ -48,6 +60,22 @@ function SettingsView({ settings, onSettingsChange, onDataChange }) {
       toast.error("儲存失敗: " + detail);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCleanupNow = async () => {
+    if (historyRetentionDays <= 0) {
+      toast.error("請先選擇保留天數");
+      return;
+    }
+    if (!window.confirm(`確定要立即刪除 ${historyRetentionDays} 天前的所有歷史記錄?`)) return;
+    try {
+      const res = await axios.post(`${API}/daily-records/cleanup?retention_days=${historyRetentionDays}`);
+      toast.success(`已清理 ${res.data.deleted || 0} 筆記錄`);
+      onDataChange && onDataChange();
+    } catch (error) {
+      const detail = error?.response?.data?.detail || error?.message || "未知錯誤";
+      toast.error("清理失敗: " + detail);
     }
   };
 
@@ -174,6 +202,38 @@ function SettingsView({ settings, onSettingsChange, onDataChange }) {
               </Button>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* History Retention */}
+      <div className="p-6 rounded-lg bg-[#141414] border border-[#262626] space-y-4">
+        <h3 className="text-xl font-medium text-neutral-200 flex items-center gap-2">
+          <Trash2 className="w-5 h-5 text-[#FFB800]" />
+          歷史記錄自動清理
+        </h3>
+        <p className="text-sm text-neutral-400">
+          自動刪除超過保留期的舊歷史記錄以節省空間。選擇「不自動刪除」則永久保留。
+        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Select value={String(historyRetentionDays)} onValueChange={(v) => setHistoryRetentionDays(Number(v))}>
+            <SelectTrigger className="w-40 bg-[#0A0A0A] border-[#262626] text-white" data-testid="retention-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-[#141414] border-[#262626] text-white">
+              {RETENTION_OPTIONS.map((r) => (
+                <SelectItem key={r.value} value={String(r.value)}>{r.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            onClick={handleCleanupNow}
+            disabled={historyRetentionDays <= 0}
+            className="border-[#262626] text-neutral-300 hover:text-white"
+            data-testid="cleanup-now-button"
+          >
+            立即清理
+          </Button>
         </div>
       </div>
 

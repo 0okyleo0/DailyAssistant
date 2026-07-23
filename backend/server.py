@@ -49,9 +49,16 @@ class Game(BaseModel):
     weekly_last_reset_date: str = ""
     weekly_reminder_minutes: int = 0
 
+    # Monthly
+    monthly_tasks: List[Task] = []
+    monthly_reset_day: str = "1"  # "1".."30" or "last"
+    monthly_reset_time: str = "00:00"
+    monthly_last_reset_date: str = ""
+    monthly_reminder_minutes: int = 0
+
     # Version (one-shot deadline)
     version_tasks: List[Task] = []
-    version_deadline: str = ""  # ISO datetime "YYYY-MM-DDTHH:MM" or empty
+    version_deadline: str = ""  # ISO datetime "YYYY-MM-DDTHH:MM" or empty (legacy)
     version_reminder_minutes: int = 0
     version_archived: bool = False
 
@@ -66,6 +73,10 @@ class GameCreate(BaseModel):
     weekly_reset_day: int = 1
     weekly_reset_time: str = "00:00"
     weekly_reminder_minutes: int = 0
+    monthly_tasks: List[Task] = []
+    monthly_reset_day: str = "1"
+    monthly_reset_time: str = "00:00"
+    monthly_reminder_minutes: int = 0
     version_tasks: List[Task] = []
     version_deadline: str = ""
     version_reminder_minutes: int = 0
@@ -83,6 +94,11 @@ class GameUpdate(BaseModel):
     weekly_reset_time: Optional[str] = None
     weekly_last_reset_date: Optional[str] = None
     weekly_reminder_minutes: Optional[int] = None
+    monthly_tasks: Optional[List[Task]] = None
+    monthly_reset_day: Optional[str] = None
+    monthly_reset_time: Optional[str] = None
+    monthly_last_reset_date: Optional[str] = None
+    monthly_reminder_minutes: Optional[int] = None
     version_tasks: Optional[List[Task]] = None
     version_deadline: Optional[str] = None
     version_reminder_minutes: Optional[int] = None
@@ -95,11 +111,13 @@ class Settings(BaseModel):
     id: str = "default"
     notifications_enabled: bool = False
     custom_protocol: str = "gamelauncher"
+    history_retention_days: int = 0  # 0 = never delete
 
 
 class SettingsUpdate(BaseModel):
     notifications_enabled: Optional[bool] = None
     custom_protocol: Optional[str] = None
+    history_retention_days: Optional[int] = None
 
 
 class DailyRecord(BaseModel):
@@ -136,6 +154,7 @@ def field_for_type(task_type: str):
     return {
         "daily": "tasks",
         "weekly": "weekly_tasks",
+        "monthly": "monthly_tasks",
         "version": "version_tasks",
     }.get(task_type, "tasks")
 
@@ -223,6 +242,8 @@ async def uncheck_all(req: UncheckAllRequest):
         fields.append("tasks")
     if req.task_type in ("weekly", "all"):
         fields.append("weekly_tasks")
+    if req.task_type in ("monthly", "all"):
+        fields.append("monthly_tasks")
     if req.task_type in ("version", "all"):
         fields.append("version_tasks")
 
@@ -297,6 +318,15 @@ async def reset_weekly(req: ResetRequest):
     return {"message": "Weekly reset", "record": record.model_dump()}
 
 
+@api_router.post("/games/reset-monthly")
+async def reset_monthly(req: ResetRequest):
+    game = await db.games.find_one({"id": req.game_id}, {"_id": 0})
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    record = await _save_record_and_reset(game, "monthly", "monthly_tasks", "monthly_last_reset_date")
+    return {"message": "Monthly reset", "record": record.model_dump()}
+
+
 @api_router.post("/games/archive-version")
 async def archive_version(req: ResetRequest):
     game = await db.games.find_one({"id": req.game_id}, {"_id": 0})
@@ -351,6 +381,16 @@ async def get_daily_records(limit: int = 100, game_id: Optional[str] = None, tas
 async def bulk_delete_records(record_ids: List[str]):
     result = await db.daily_records.delete_many({"id": {"$in": record_ids}})
     return {"message": f"{result.deleted_count} records deleted"}
+
+
+@api_router.post("/daily-records/cleanup")
+async def cleanup_records(retention_days: int = 0):
+    """Delete records older than retention_days. retention_days=0 -> no-op."""
+    if retention_days <= 0:
+        return {"message": "Cleanup skipped (retention=0)", "deleted": 0}
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).strftime("%Y-%m-%d")
+    result = await db.daily_records.delete_many({"date": {"$lt": cutoff}})
+    return {"message": f"{result.deleted_count} old records deleted", "deleted": result.deleted_count}
 
 
 @api_router.delete("/daily-records/{record_id}")

@@ -190,6 +190,11 @@ async function handleApiRequest({ method, url, data }) {
     if (!result) return { status: 404, data: { detail: 'Game not found' } };
     return { status: 200, data: { message: 'Weekly reset', record: result } };
   }
+  if (m === 'POST' && pathname === '/api/games/reset-monthly') {
+    const result = dataStore.resetMonthly(data.game_id);
+    if (!result) return { status: 404, data: { detail: 'Game not found' } };
+    return { status: 200, data: { message: 'Monthly reset', record: result } };
+  }
   if (m === 'POST' && pathname === '/api/games/archive-version') {
     const result = dataStore.archiveVersion(data.game_id);
     if (!result) return { status: 404, data: { detail: 'Game not found' } };
@@ -212,6 +217,11 @@ async function handleApiRequest({ method, url, data }) {
   if (m === 'DELETE' && pathname === '/api/daily-records/bulk/delete') {
     const count = dataStore.bulkDeleteRecords(data || []);
     return { status: 200, data: { message: `${count} records deleted successfully` } };
+  }
+  if (m === 'POST' && pathname === '/api/daily-records/cleanup') {
+    const retention = Number(query.retention_days) || 0;
+    const deleted = dataStore.cleanupOldRecords(retention);
+    return { status: 200, data: { message: `${deleted} old records deleted`, deleted } };
   }
   const recordMatch = pathname.match(/^\/api\/daily-records\/([^/]+)$/);
   if (recordMatch && m === 'DELETE') {

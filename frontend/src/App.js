@@ -51,19 +51,23 @@ function App() {
             await axios.post(`${API}/games/reset-daily`, { game_id: item.gameId });
           } else if (item.type === "weekly") {
             await axios.post(`${API}/games/reset-weekly`, { game_id: item.gameId });
+          } else if (item.type === "monthly") {
+            await axios.post(`${API}/games/reset-monthly`, { game_id: item.gameId });
           }
-          notified.push(`${item.gameName} - ${item.type === "weekly" ? "每周" : "每日"}任務`);
+          const typeLabel = item.type === "monthly" ? "每月" : item.type === "weekly" ? "每周" : "每日";
+          notified.push(`${item.gameName} - ${typeLabel}任務`);
         } catch (err) {
           console.error("Reset failed:", err);
         }
       }
 
-      // Per-task resets (weekly override + version cycle)
+      // Per-task resets (weekly override + monthly override + version cycle)
       const perTask = computePerTaskResets(current);
       for (const patch of perTask) {
         try {
           const body = {};
           if (patch.weekly_tasks) body.weekly_tasks = patch.weekly_tasks;
+          if (patch.monthly_tasks) body.monthly_tasks = patch.monthly_tasks;
           if (patch.version_tasks) body.version_tasks = patch.version_tasks;
           await axios.put(`${API}/games/${patch.gameId}`, body);
           notified.push(`${patch.gameName} - 個別任務`);
@@ -105,6 +109,22 @@ function App() {
     fetchGames();
     fetchSettings();
   }, [fetchGames, fetchSettings]);
+
+  // Run history cleanup once on startup and hourly, based on settings
+  useEffect(() => {
+    const runCleanup = async () => {
+      const days = Number(settings?.history_retention_days) || 0;
+      if (days <= 0) return;
+      try {
+        await axios.post(`${API}/daily-records/cleanup?retention_days=${days}`);
+      } catch (e) {
+        console.error("History cleanup error:", e);
+      }
+    };
+    runCleanup();
+    const interval = setInterval(runCleanup, 3600_000); // hourly
+    return () => clearInterval(interval);
+  }, [settings?.history_retention_days]);
 
   useEffect(() => {
     runAutoReset();

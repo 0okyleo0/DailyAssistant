@@ -12,7 +12,7 @@ import { zhCN } from "date-fns/locale";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const TYPE_LABELS = { daily: "每日", weekly: "每周", version: "版本", all: "全部" };
+const TYPE_LABELS = { daily: "每日", weekly: "每周", monthly: "每月", version: "版本", all: "全部" };
 
 function HistoryView({ games }) {
   const [records, setRecords] = useState([]);
@@ -141,9 +141,10 @@ function HistoryView({ games }) {
   return (
     <div className="space-y-6" data-testid="history-view">
       <Tabs value={taskType} onValueChange={setTaskType}>
-        <TabsList className="grid grid-cols-4 max-w-md">
+        <TabsList className="grid grid-cols-5 max-w-lg">
           <TabsTrigger value="daily" data-testid="history-type-daily">每日</TabsTrigger>
           <TabsTrigger value="weekly" data-testid="history-type-weekly">每周</TabsTrigger>
+          <TabsTrigger value="monthly" data-testid="history-type-monthly">每月</TabsTrigger>
           <TabsTrigger value="version" data-testid="history-type-version">版本</TabsTrigger>
           <TabsTrigger value="all" data-testid="history-type-all">全部</TabsTrigger>
         </TabsList>

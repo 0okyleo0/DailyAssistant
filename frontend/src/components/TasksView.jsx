@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Copy, CheckCircle2, Circle, Clock, Rocket, Calendar, Archive, Repeat } from "lucide-react";
+import { Copy, CheckCircle2, Circle, Clock, Rocket, Calendar, Archive, Repeat, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -7,9 +7,11 @@ import axios from "axios";
 import { launchGame, copyGamePath } from "@/utils/launcher";
 import {
   weekdayLabel,
+  monthDayLabel,
   formatMinutes,
   computeDailyReset,
   computeWeeklyTaskReset,
+  computeMonthlyTaskReset,
   computeVersionTaskDeadline,
 } from "@/utils/timeOptions";
 
@@ -19,6 +21,7 @@ const API = `${BACKEND_URL}/api`;
 const FIELDS = {
   daily: { tasks: "tasks", label: "每日任務" },
   weekly: { tasks: "weekly_tasks", label: "每周任務" },
+  monthly: { tasks: "monthly_tasks", label: "每月任務" },
   version: { tasks: "version_tasks", label: "版本任務" },
 };
 
@@ -95,6 +98,7 @@ function TasksView({ games, onGamesChange, settings }) {
     let target = null;
     if (type === "daily") target = computeDailyReset(game, now);
     else if (type === "weekly") target = computeWeeklyTaskReset(task, game, now);
+    else if (type === "monthly") target = computeMonthlyTaskReset(task, game, now);
     else if (type === "version") target = computeVersionTaskDeadline(task, now);
     if (!target) return { target: null, minutesLeft: null, dueSoon: false };
     const minutesLeft = Math.max(0, Math.round((target - now) / 60000));
@@ -122,6 +126,7 @@ function TasksView({ games, onGamesChange, settings }) {
           <div className="flex flex-col items-end text-xs shrink-0">
             <span className="text-neutral-500" data-testid={`task-target-${task.id}`}>
               {type === "weekly" ? weekdayLabel(task.reset_day ?? game.weekly_reset_day) + " " : ""}
+              {type === "monthly" ? monthDayLabel(task.reset_day ?? game.monthly_reset_day) + " " : ""}
               {fmtDateTime(timing.target)}
               {type === "version" && task.cycle_enabled && (
                 <Repeat className="inline w-3 h-3 ml-1 text-[#00F0FF]" />
@@ -166,6 +171,19 @@ function TasksView({ games, onGamesChange, settings }) {
         subtitle = `最快重置: ${fmtDateTime(earliest)} · ${formatMinutes(mins)}`;
       } else {
         subtitle = `${weekdayLabel(game.weekly_reset_day)} ${game.weekly_reset_time || "00:00"} 預設重置`;
+      }
+    } else if (type === "monthly") {
+      let earliest = null;
+      for (const t of tasks) {
+        const dt = computeMonthlyTaskReset(t, game, now);
+        if (dt && (!earliest || dt < earliest)) earliest = dt;
+      }
+      if (earliest) {
+        const mins = Math.max(0, Math.round((earliest - now) / 60000));
+        dueSoon = mins <= 1440;
+        subtitle = `最快重置: ${fmtDateTime(earliest)} · ${formatMinutes(mins)}`;
+      } else {
+        subtitle = `${monthDayLabel(game.monthly_reset_day)} ${game.monthly_reset_time || "00:00"} 預設重置`;
       }
     } else {
       // version
@@ -223,14 +241,16 @@ function TasksView({ games, onGamesChange, settings }) {
 
   const daily = statsFor("daily");
   const weekly = statsFor("weekly");
+  const monthly = statsFor("monthly");
   const version = statsFor("version");
 
   return (
     <div className="space-y-6" data-testid="tasks-view">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { key: "daily", label: "每日", stat: daily, color: "text-[#00F0FF]" },
           { key: "weekly", label: "每周", stat: weekly, color: "text-[#39FF14]" },
+          { key: "monthly", label: "每月", stat: monthly, color: "text-[#B388FF]" },
           { key: "version", label: "版本", stat: version, color: "text-[#FFB800]" },
         ].map(({ key, label, stat, color }) => (
           <div key={key} className="p-4 rounded-lg bg-[#141414] border border-[#262626]" data-testid={`stats-${key}`}>
@@ -243,9 +263,10 @@ function TasksView({ games, onGamesChange, settings }) {
 
       <Tabs value={activeType} onValueChange={setActiveType}>
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <TabsList className="grid grid-cols-3 max-w-md">
+          <TabsList className="grid grid-cols-4 max-w-lg">
             <TabsTrigger value="daily" data-testid="type-tab-daily"><Clock className="w-4 h-4 mr-1" />每日</TabsTrigger>
             <TabsTrigger value="weekly" data-testid="type-tab-weekly"><Calendar className="w-4 h-4 mr-1" />每周</TabsTrigger>
+            <TabsTrigger value="monthly" data-testid="type-tab-monthly"><CalendarDays className="w-4 h-4 mr-1" />每月</TabsTrigger>
             <TabsTrigger value="version" data-testid="type-tab-version"><Archive className="w-4 h-4 mr-1" />版本</TabsTrigger>
           </TabsList>
           <Button
@@ -258,7 +279,7 @@ function TasksView({ games, onGamesChange, settings }) {
           </Button>
         </div>
 
-        {["daily", "weekly", "version"].map((type) => (
+        {["daily", "weekly", "monthly", "version"].map((type) => (
           <TabsContent key={type} value={type} className="mt-0 space-y-6">
             {games.length === 0 ? (
               <div className="text-center py-16 text-neutral-500">

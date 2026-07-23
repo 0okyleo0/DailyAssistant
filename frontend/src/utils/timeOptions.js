@@ -22,6 +22,19 @@ export const WEEKDAY_OPTIONS = [
   { value: 6, label: "週六" },
 ];
 
+// Month day options: 1..30 plus "last" (last day of month, auto-adjusts for 28/29/30/31)
+export const MONTH_DAY_OPTIONS = (() => {
+  const arr = [];
+  for (let d = 1; d <= 30; d++) arr.push({ value: d, label: `${d} 號` });
+  arr.push({ value: "last", label: "最後一天" });
+  return arr;
+})();
+
+export function monthDayLabel(value) {
+  const opt = MONTH_DAY_OPTIONS.find((o) => String(o.value) === String(value));
+  return opt ? opt.label : "";
+}
+
 // Reminder offset in minutes. 0 = disabled.
 export const REMINDER_OPTIONS = [
   { value: 0, label: "不提醒" },
@@ -74,6 +87,29 @@ export function nextWeeklyResetDate(dayOfWeek, resetTime, referenceDate = new Da
   return d;
 }
 
+/**
+ * Compute the next occurrence Date for a monthly reset.
+ * dayOfMonth: 1..30 or "last" (last day of month)
+ */
+export function nextMonthlyResetDate(dayOfMonth, resetTime, referenceDate = new Date()) {
+  const [h, m] = (resetTime || "00:00").split(":").map(Number);
+  const buildForMonth = (year, month) => {
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    let dom;
+    if (String(dayOfMonth) === "last") dom = lastDay;
+    else dom = Math.min(Number(dayOfMonth) || 1, lastDay);
+    const dt = new Date(year, month, dom, h || 0, m || 0, 0, 0);
+    return dt;
+  };
+  const y = referenceDate.getFullYear();
+  const mo = referenceDate.getMonth();
+  let dt = buildForMonth(y, mo);
+  if (dt <= referenceDate) {
+    dt = buildForMonth(y, mo + 1);
+  }
+  return dt;
+}
+
 export function parseVersionDeadline(deadlineStr) {
   if (!deadlineStr) return null;
   try {
@@ -108,6 +144,15 @@ export function computeWeeklyTaskReset(task, game, referenceDate = new Date()) {
   const day = task?.reset_day ?? game?.weekly_reset_day ?? 1;
   const time = task?.reset_time || game?.weekly_reset_time || "00:00";
   return nextWeeklyResetDate(day, time, referenceDate);
+}
+
+/**
+ * Compute the next reset Date for a monthly task, honoring per-task overrides.
+ */
+export function computeMonthlyTaskReset(task, game, referenceDate = new Date()) {
+  const day = task?.reset_day ?? game?.monthly_reset_day ?? 1;
+  const time = task?.reset_time || game?.monthly_reset_time || "00:00";
+  return nextMonthlyResetDate(day, time, referenceDate);
 }
 
 /**

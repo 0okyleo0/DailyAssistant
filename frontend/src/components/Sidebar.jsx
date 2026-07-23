@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import axios from "axios";
 import { launchGame, copyGamePath } from "@/utils/launcher";
-import { TIME_OPTIONS, WEEKDAY_OPTIONS } from "@/utils/timeOptions";
+import { TIME_OPTIONS, WEEKDAY_OPTIONS, MONTH_DAY_OPTIONS } from "@/utils/timeOptions";
 import { ReminderInput } from "@/components/ReminderInput";
-import { WeeklyTaskSettings, VersionTaskSettings } from "@/components/TaskSettings";
+import { WeeklyTaskSettings, MonthlyTaskSettings, VersionTaskSettings } from "@/components/TaskSettings";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -83,6 +83,11 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
   const [weeklyResetTime, setWeeklyResetTime] = useState("00:00");
   const [weeklyReminder, setWeeklyReminder] = useState(0);
 
+  const [monthlyTasks, setMonthlyTasks] = useState([emptyTask()]);
+  const [monthlyResetDay, setMonthlyResetDay] = useState("1");
+  const [monthlyResetTime, setMonthlyResetTime] = useState("00:00");
+  const [monthlyReminder, setMonthlyReminder] = useState(0);
+
   const [versionTasks, setVersionTasks] = useState([emptyTask()]);
   const [versionReminder, setVersionReminder] = useState(0);
 
@@ -96,6 +101,10 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
     setWeeklyResetDay(1);
     setWeeklyResetTime("00:00");
     setWeeklyReminder(0);
+    setMonthlyTasks([emptyTask()]);
+    setMonthlyResetDay("1");
+    setMonthlyResetTime("00:00");
+    setMonthlyReminder(0);
     setVersionTasks([emptyTask()]);
     setVersionReminder(0);
     setEditingGame(null);
@@ -126,6 +135,10 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
       weekly_reset_day: Number(weeklyResetDay),
       weekly_reset_time: weeklyResetTime,
       weekly_reminder_minutes: Number(weeklyReminder),
+      monthly_tasks: validTasks(monthlyTasks),
+      monthly_reset_day: String(monthlyResetDay),
+      monthly_reset_time: monthlyResetTime,
+      monthly_reminder_minutes: Number(monthlyReminder),
       version_tasks: validTasks(versionTasks),
       version_reminder_minutes: Number(versionReminder),
     };
@@ -158,6 +171,10 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
     setWeeklyResetDay(game.weekly_reset_day ?? 1);
     setWeeklyResetTime(game.weekly_reset_time || "00:00");
     setWeeklyReminder(game.weekly_reminder_minutes || 0);
+    setMonthlyTasks((game.monthly_tasks || []).length > 0 ? game.monthly_tasks : [emptyTask()]);
+    setMonthlyResetDay(String(game.monthly_reset_day ?? "1"));
+    setMonthlyResetTime(game.monthly_reset_time || "00:00");
+    setMonthlyReminder(game.monthly_reminder_minutes || 0);
     setVersionTasks((game.version_tasks || []).length > 0 ? game.version_tasks : [emptyTask()]);
     setVersionReminder(game.version_reminder_minutes || 0);
     setDialogOpen(true);
@@ -208,10 +225,11 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <Tabs value={tab} onValueChange={setTab}>
-                    <TabsList className="grid grid-cols-4 w-full">
+                    <TabsList className="grid grid-cols-5 w-full">
                       <TabsTrigger value="basic" data-testid="tab-basic">基本</TabsTrigger>
                       <TabsTrigger value="daily" data-testid="tab-daily">每日</TabsTrigger>
                       <TabsTrigger value="weekly" data-testid="tab-weekly">每周</TabsTrigger>
+                      <TabsTrigger value="monthly" data-testid="tab-monthly">每月</TabsTrigger>
                       <TabsTrigger value="version" data-testid="tab-version">版本</TabsTrigger>
                     </TabsList>
 
@@ -300,6 +318,59 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                       </div>
                     </TabsContent>
 
+                    <TabsContent value="monthly" className="space-y-4 mt-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-neutral-400">預設重置日</Label>
+                          <Select value={String(monthlyResetDay)} onValueChange={setMonthlyResetDay}>
+                            <SelectTrigger className="bg-[#0A0A0A] border-[#262626] text-white" data-testid="monthly-reset-day">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-[#141414] border-[#262626] text-white max-h-72">
+                              {MONTH_DAY_OPTIONS.map((d) => (
+                                <SelectItem key={d.value} value={String(d.value)}>{d.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-neutral-400">預設重置時間</Label>
+                          <Select value={monthlyResetTime} onValueChange={setMonthlyResetTime}>
+                            <SelectTrigger className="bg-[#0A0A0A] border-[#262626] text-white" data-testid="monthly-reset-time">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-[#141414] border-[#262626] text-white max-h-72">
+                              {TIME_OPTIONS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-neutral-400">提醒</Label>
+                        <ReminderInput
+                          value={monthlyReminder}
+                          onChange={setMonthlyReminder}
+                          showDays={true}
+                          testIdPrefix="monthly-reminder"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-neutral-400">每月任務清單 <span className="text-xs text-neutral-500">(每筆可自訂重置日期)</span></Label>
+                        <TaskListEditor
+                          tasks={monthlyTasks}
+                          setTasks={setMonthlyTasks}
+                          testIdPrefix="monthly-task"
+                          renderExtra={(task, patch, index) => (
+                            <MonthlyTaskSettings
+                              task={task}
+                              onChange={patch}
+                              testIdPrefix={`monthly-task-settings-${index}`}
+                            />
+                          )}
+                        />
+                      </div>
+                    </TabsContent>
+
                     <TabsContent value="version" className="space-y-4 mt-4">
                       <div>
                         <Label className="text-neutral-400">提醒 <span className="text-xs text-neutral-500">(適用所有版本任務)</span></Label>
@@ -357,7 +428,7 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                       </div>
                     </div>
                     <div className="text-xs text-neutral-500 space-y-0.5">
-                      <div>日 {(game.tasks || []).length} / 週 {(game.weekly_tasks || []).length} / 版 {(game.version_tasks || []).length}</div>
+                      <div>日 {(game.tasks || []).length} / 週 {(game.weekly_tasks || []).length} / 月 {(game.monthly_tasks || []).length} / 版 {(game.version_tasks || []).length}</div>
                     </div>
                   </div>
                 ))

@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TIME_OPTIONS, WEEKDAY_OPTIONS, initialVersionNextDeadline } from "@/utils/timeOptions";
+import { TIME_OPTIONS, WEEKDAY_OPTIONS, MONTH_DAY_OPTIONS, monthDayLabel, initialVersionNextDeadline } from "@/utils/timeOptions";
 import { DateTimePicker } from "@/components/DateTimePicker";
 
 /**
@@ -247,3 +247,85 @@ export function VersionTaskSettings({ task, onChange, testIdPrefix }) {
     </div>
   );
 }
+
+/**
+ * Per-task settings for monthly tasks. Similar to weekly but day is 1..30 or "last".
+ */
+export function MonthlyTaskSettings({ task, onChange, testIdPrefix }) {
+  const hasOverride = task.reset_day !== undefined || task.reset_time !== undefined;
+  const [expanded, setExpanded] = useState(hasOverride);
+
+  const toggleOverride = (on) => {
+    if (on) {
+      onChange({ reset_day: task.reset_day ?? "1", reset_time: task.reset_time ?? "00:00" });
+      setExpanded(true);
+    } else {
+      onChange({ reset_day: undefined, reset_time: undefined });
+    }
+  };
+
+  return (
+    <div className="border border-[#262626] rounded-md bg-[#0A0A0A]/50 mt-1">
+      <button
+        type="button"
+        className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
+        onClick={() => setExpanded(!expanded)}
+        data-testid={`${testIdPrefix}-toggle-panel`}
+      >
+        <span className="flex items-center gap-1">
+          {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          {hasOverride ? `每月重置: ${monthDayLabel(task.reset_day)} ${task.reset_time || "00:00"}` : "使用預設重置時間"}
+        </span>
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={hasOverride}
+              onCheckedChange={toggleOverride}
+              data-testid={`${testIdPrefix}-override-switch`}
+            />
+            <span className="text-xs text-neutral-400">自訂此任務的重置日期</span>
+          </div>
+          {hasOverride && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs text-neutral-500">重置日期</Label>
+                <Select
+                  value={String(task.reset_day ?? "1")}
+                  onValueChange={(v) => onChange({ reset_day: v })}
+                >
+                  <SelectTrigger className="bg-[#0A0A0A] border-[#262626] text-white h-8" data-testid={`${testIdPrefix}-day`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#141414] border-[#262626] text-white max-h-72">
+                    {MONTH_DAY_OPTIONS.map((d) => (
+                      <SelectItem key={d.value} value={String(d.value)}>{d.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-neutral-500">重置時間</Label>
+                <Select
+                  value={task.reset_time || "00:00"}
+                  onValueChange={(v) => onChange({ reset_time: v })}
+                >
+                  <SelectTrigger className="bg-[#0A0A0A] border-[#262626] text-white h-8" data-testid={`${testIdPrefix}-time`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#141414] border-[#262626] text-white max-h-72">
+                    {TIME_OPTIONS.map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+

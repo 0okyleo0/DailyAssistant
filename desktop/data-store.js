@@ -22,6 +22,12 @@ function ensureGameShape(g) {
     weekly_reset_time: g.weekly_reset_time || '00:00',
     weekly_last_reset_date: g.weekly_last_reset_date || '',
     weekly_reminder_minutes: g.weekly_reminder_minutes ?? 0,
+    // Monthly
+    monthly_tasks: g.monthly_tasks || [],
+    monthly_reset_day: g.monthly_reset_day ?? '1',
+    monthly_reset_time: g.monthly_reset_time || '00:00',
+    monthly_last_reset_date: g.monthly_last_reset_date || '',
+    monthly_reminder_minutes: g.monthly_reminder_minutes ?? 0,
     // Version (per-task deadlines; game-level version_deadline retained for legacy migration only)
     version_tasks: g.version_tasks || [],
     version_deadline: g.version_deadline || '',
@@ -86,6 +92,7 @@ function getDefaultSettings() {
     id: 'default',
     notifications_enabled: false,
     custom_protocol: 'gamelauncher',
+    history_retention_days: 0,
   };
 }
 
@@ -96,11 +103,13 @@ function genId(prefix = 'id') {
 const TASK_FIELDS = {
   daily: 'tasks',
   weekly: 'weekly_tasks',
+  monthly: 'monthly_tasks',
   version: 'version_tasks',
 };
 const RESET_DATE_FIELDS = {
   daily: 'last_reset_date',
   weekly: 'weekly_last_reset_date',
+  monthly: 'monthly_last_reset_date',
   version: 'last_reset_date',
 };
 
@@ -159,6 +168,7 @@ function uncheckAllTasks(taskType = 'all') {
   const fields = [];
   if (taskType === 'all' || taskType === 'daily') fields.push('tasks');
   if (taskType === 'all' || taskType === 'weekly') fields.push('weekly_tasks');
+  if (taskType === 'all' || taskType === 'monthly') fields.push('monthly_tasks');
   if (taskType === 'all' || taskType === 'version') fields.push('version_tasks');
   data.games.forEach((game) => {
     fields.forEach((f) => (game[f] || []).forEach((t) => (t.completed = false)));
@@ -207,6 +217,12 @@ function resetWeekly(gameId) {
   const game = data.games.find((g) => g.id === gameId);
   if (!game) return null;
   return _saveRecordAndReset(game, 'weekly');
+}
+
+function resetMonthly(gameId) {
+  const game = data.games.find((g) => g.id === gameId);
+  if (!game) return null;
+  return _saveRecordAndReset(game, 'monthly');
 }
 
 function archiveVersion(gameId) {
@@ -258,6 +274,21 @@ function bulkDeleteRecords(recordIds) {
   return count;
 }
 
+function cleanupOldRecords(retentionDays) {
+  const days = Number(retentionDays) || 0;
+  if (days <= 0) return 0;
+  const cutoffMs = Date.now() - days * 86400000;
+  const before = data.daily_records.length;
+  data.daily_records = data.daily_records.filter((r) => {
+    if (!r.date) return true;
+    const t = new Date(r.date).getTime();
+    return !isNaN(t) && t >= cutoffMs;
+  });
+  const deleted = before - data.daily_records.length;
+  if (deleted > 0) save();
+  return deleted;
+}
+
 function getStats(gameId = null, taskType = null) {
   let records = data.daily_records;
   if (gameId) records = records.filter((r) => r.game_id === gameId);
@@ -307,12 +338,14 @@ module.exports = {
   resetDaily,
   resetGame: resetDaily,
   resetWeekly,
+  resetMonthly,
   archiveVersion,
   getSettings,
   updateSettings,
   getDailyRecords,
   deleteDailyRecord,
   bulkDeleteRecords,
+  cleanupOldRecords,
   getStats,
   backupAll,
   restoreAll,
