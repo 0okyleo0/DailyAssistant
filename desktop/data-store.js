@@ -176,6 +176,15 @@ function uncheckAllTasks(taskType = 'all') {
   save();
 }
 
+// Return local date "YYYY-MM-DD" (not UTC). Reset time is stored/compared in local time,
+// so date buckets MUST also be local to avoid UTC-rollover bugs in non-UTC timezones.
+function localDateStr(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
 function _saveRecordAndReset(game, taskType) {
   const field = TASK_FIELDS[taskType];
   const dateField = RESET_DATE_FIELDS[taskType];
@@ -184,7 +193,9 @@ function _saveRecordAndReset(game, taskType) {
   const completed = tasks.filter((t) => t.completed).length;
   const rate = total > 0 ? Math.round((completed / total) * 10000) / 100 : 0;
 
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = localDateStr(yesterdayDate);
   const record = {
     id: `record_${taskType}_${game.id}_${yesterday}`,
     date: yesterday,
@@ -201,8 +212,7 @@ function _saveRecordAndReset(game, taskType) {
   else data.daily_records.push(record);
 
   tasks.forEach((t) => (t.completed = false));
-  const today = new Date().toISOString().split('T')[0];
-  game[dateField] = today;
+  game[dateField] = localDateStr(new Date());
   save();
   return record;
 }
@@ -277,12 +287,14 @@ function bulkDeleteRecords(recordIds) {
 function cleanupOldRecords(retentionDays) {
   const days = Number(retentionDays) || 0;
   if (days <= 0) return 0;
-  const cutoffMs = Date.now() - days * 86400000;
+  // Cutoff is a local calendar date N days ago
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+  const cutoffStr = localDateStr(cutoffDate);
   const before = data.daily_records.length;
   data.daily_records = data.daily_records.filter((r) => {
     if (!r.date) return true;
-    const t = new Date(r.date).getTime();
-    return !isNaN(t) && t >= cutoffMs;
+    return r.date >= cutoffStr; // string compare works for YYYY-MM-DD
   });
   const deleted = before - data.daily_records.length;
   if (deleted > 0) save();

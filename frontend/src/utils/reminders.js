@@ -6,6 +6,7 @@ import {
   nextMonthlyResetDate,
   computeVersionTaskDeadline,
   formatMinutes,
+  localDateStr,
 } from "./timeOptions";
 
 // Track fired reminders to avoid duplicates (keyed by "gameId:type:targetTimestamp")
@@ -174,7 +175,9 @@ function fireNotification(group, useElectron) {
  */
 export function shouldResetGames(games, now = new Date()) {
   const toReset = [];
-  const today = now.toISOString().split("T")[0];
+  // IMPORTANT: use LOCAL date (not UTC). Reset times are stored/compared in local time,
+  // so mixing UTC dates causes phantom resets at UTC midnight (e.g. 08:00 local for UTC+8).
+  const today = localDateStr(now);
 
   for (const game of games) {
     // Daily

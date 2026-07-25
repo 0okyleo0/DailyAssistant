@@ -121,9 +121,16 @@ export function parseVersionDeadline(deadlineStr) {
 }
 
 /**
- * Format a minute count as "X 天 X 小時 X 分鐘後", omitting zero segments.
- * Examples: 10 -> "10 分鐘後" ; 60 -> "1 小時後" ; 1455 -> "1 天 15 分鐘後"
+ * Return the LOCAL calendar date as "YYYY-MM-DD" (not UTC).
+ * Critical: reset logic uses local reset_time (setHours), so date buckets must also be local
+ * to avoid UTC-date-rollover bugs that skip or double-fire resets in non-UTC timezones.
  */
+export function localDateStr(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
 export function formatMinutes(totalMinutes) {
   const m = Math.max(0, Math.round(Number(totalMinutes) || 0));
   const days = Math.floor(m / 1440);
