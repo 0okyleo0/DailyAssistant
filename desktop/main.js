@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, Notification, dialog, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Notification, dialog, powerMonitor, globalShortcut } = require('electron');
 const path = require('path');
 const dataStore = require('./data-store');
 const { launchGame } = require('./game-launcher');
@@ -29,6 +29,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
     title: '每日任務管理器',
     autoHideMenuBar: true,
@@ -152,6 +153,17 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // On system resume from sleep, notify renderer to catch up on missed resets/reminders
+  try {
+    powerMonitor.on('resume', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('system-resumed');
+      }
+    });
+  } catch (err) {
+    console.warn('[powerMonitor] listener failed:', err);
+  }
 });
 
 app.on('window-all-closed', () => {

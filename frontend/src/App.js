@@ -133,7 +133,22 @@ function App() {
       runAutoReset();
       runReminders();
     }, 60000);
-    return () => clearInterval(interval);
+    // Catch up immediately when window regains focus or system resumes from sleep
+    const catchUp = () => {
+      runAutoReset();
+      runReminders();
+    };
+    window.addEventListener("focus", catchUp);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") catchUp();
+    });
+    if (typeof window !== "undefined" && window.electronAPI?.onSystemResumed) {
+      window.electronAPI.onSystemResumed(catchUp);
+    }
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", catchUp);
+    };
   }, [runAutoReset, runReminders]);
 
   useEffect(() => {
