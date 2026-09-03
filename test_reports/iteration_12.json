@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend-only regression test of the HistoryView chart duplicate-date bug. Seeded 3 games x 12 distinct dates x 4 task types (144 records, multiple records per date) via /api/restore, then verified the 7-day bar chart and 30-day trend line chart in the browser (public preview URL). Result: bug is FIXED — every chart bucket maps to a unique calendar date for all 5 task-type tabs (daily/weekly/monthly/version/all) and with a per-game filter applied; rate is the total_tasks-weighted daily average (verified 75% via tooltip where a naive per-record mean would be 66.67%); charts are hidden and the empty placeholder is shown when there are no records. Original DB state was backed up before seeding and restored afterwards.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/stats", "issue": "7天平均/30天平均 use an UNWEIGHTED mean of per-record completion_rate, while the charts now use a total_tasks-weighted daily rate. With seeded data the cards showed 57.14%/61.11% while the chart showed 75% for the same days — user-visible inconsistency. Consider weighting stats by total_tasks (or aggregating per day) for consistency."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/seed_history_charts.py"],
+  "action_items": [
+    "OPTIONAL: align /api/stats averages with the new weighted daily aggregation used by the charts (currently 57.14% card vs 75% chart for identical data).",
+    "OPTIONAL: `new Date('YYYY-MM-DD')` in weeklyData/monthlyData/table formatting parses as UTC midnight and is rendered in local time — in negative-UTC-offset timezones every label will show the previous day. Prefer parsing as local date (e.g. new Date(y, m-1, d) or date-fns parseISO with explicit handling)."
+  ],
+  "critical_code_review_comments": [
+    "FIXED BY TESTER: grouped.map() returned a bare <> fragment with key on the inner <tr>, producing a React 'Each child in a list should have a unique key prop' console error on every HistoryView render. Replaced with <Fragment key={group.key}> (imported Fragment). Group expand/collapse re-verified working.",
+    "dailyAggregated correctly sums total_tasks/completed_tasks per date before slicing, so per-game-per-day duplication is resolved. Note the 'all' tab merges different task_types into the same date bucket — this appears intentional but is worth confirming with product intent.",
+    "HistoryView.jsx is ~370 lines with chart + table + CRUD in one file; consider extracting the chart block and the records table into sub-components."
+  ],
+  "updated_files": ["/app/frontend/src/components/HistoryView.jsx", "/app/backend/tests/seed_history_charts.py"],
+  "success_rate": {"backend": "not tested (frontend-only request)", "frontend": "100% (12/12 chart assertions passed)"},
+  "seed_data_creation": "Temporary: TEST_GameA/B/C + 144 daily_records over 12 distinct dates (2026-08-19..2026-08-30), 4 task types. Pre-existing DB state was saved to /tmp/hist_backup.json and fully restored at the end (games list back to empty, original records restored). Re-seed anytime with `python /app/backend/tests/seed_history_charts.py backup|seed|restore`.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Chart aggregation bug verified fixed. Use /app/backend/tests/seed_history_charts.py (backup -> seed -> restore) to recreate multi-game same-date records; there is no POST /api/daily-records, seeding must go through POST /api/restore. Recharts in this build exposes svg.recharts-surface but NOT .recharts-xAxis, so extract x labels via page.evaluate over svg.recharts-surface text nodes (regex ^\\d{2}/\\d{2}$); .recharts-bar-rectangle and .recharts-line-dot counts work. Note the app auto-runs reset-daily on load and upserts a record id record_daily_{gid}_{yesterday}, which overwrites a seeded record for yesterday's date (seen as a 0% bar for the latest day) — expected behavior, not a bug.",
+  "rca_of_the_issue": "Original bug: weeklyData/monthlyData were built from records.slice(0,7|30) where /api/daily-records returns one row per game per day, so N games on one day consumed N chart slots and the same MM/dd label repeated. Fix in place: a dailyAggregated map keyed by date sums total_tasks/completed_tasks, sorts desc, computes a weighted rate, and only then is sliced/reversed. Verified in-browser: 7 unique labels/7 bars and 12 unique labels/12 dots with 3 games per date across all task-type tabs."
+}

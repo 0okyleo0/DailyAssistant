@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { Trash2, Calendar, Filter, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -129,13 +129,33 @@ function HistoryView({ games }) {
   const allRecordIds = records.map((r) => r.id);
   const allSelected = allRecordIds.length > 0 && allRecordIds.every((id) => selectedRecords.includes(id));
 
-  const weeklyData = records.slice(0, 7).reverse().map((r) => ({
+  // Aggregate records by date for chart display (one bar/point per calendar day).
+  // Raw `records` contains one entry PER GAME PER DAY, so slicing directly duplicates dates.
+  const dailyAggregated = (() => {
+    const map = new Map();
+    for (const r of records) {
+      if (!r.date) continue;
+      if (!map.has(r.date)) map.set(r.date, { date: r.date, total: 0, done: 0 });
+      const bucket = map.get(r.date);
+      bucket.total += r.total_tasks || 0;
+      bucket.done += r.completed_tasks || 0;
+    }
+    // Sort by date desc (matches records ordering), then compute rate
+    return Array.from(map.values())
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((b) => ({
+        date: b.date,
+        完成率: b.total > 0 ? Math.round((b.done / b.total) * 100) : 0,
+      }));
+  })();
+
+  const weeklyData = dailyAggregated.slice(0, 7).reverse().map((r) => ({
     date: format(new Date(r.date), "MM/dd", { locale: zhCN }),
-    完成率: r.completion_rate,
+    完成率: r.完成率,
   }));
-  const monthlyData = records.slice(0, 30).reverse().map((r) => ({
+  const monthlyData = dailyAggregated.slice(0, 30).reverse().map((r) => ({
     date: format(new Date(r.date), "MM/dd", { locale: zhCN }),
-    完成率: r.completion_rate,
+    完成率: r.完成率,
   }));
 
   return (
@@ -253,9 +273,8 @@ function HistoryView({ games }) {
                   const gs = groupStats(group);
                   const isOpen = !!expandedGroups[group.key];
                   return (
-                    <>
+                    <Fragment key={group.key}>
                       <tr
-                        key={group.key}
                         className="border-b border-[#262626] hover:bg-[#0A0A0A] cursor-pointer"
                         onClick={() => toggleGroup(group.key)}
                         data-testid={`group-row-${group.key}`}
@@ -335,7 +354,7 @@ function HistoryView({ games }) {
                           </td>
                         </tr>
                       ))}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
