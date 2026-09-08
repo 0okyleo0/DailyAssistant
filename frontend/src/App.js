@@ -23,7 +23,14 @@ function App() {
   const fetchGames = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/games`);
-      setGames(response.data);
+      // Sort by order asc (falling back to name for ties/missing)
+      const sorted = [...(response.data || [])].sort((a, b) => {
+        const ao = a.order ?? 0;
+        const bo = b.order ?? 0;
+        if (ao !== bo) return ao - bo;
+        return (a.name || "").localeCompare(b.name || "");
+      });
+      setGames(sorted);
     } catch (e) {
       console.error("Error fetching games:", e);
     }

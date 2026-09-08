@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Copy, Trash2, Edit2, Menu, X, Clock, Rocket, FolderOpen } from "lucide-react";
+import { Plus, Copy, Trash2, Edit2, Menu, X, Clock, Rocket, FolderOpen, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,7 +70,55 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGame, setEditingGame] = useState(null);
   const [tab, setTab] = useState("basic");
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
   const isElectron = typeof window !== "undefined" && !!window.electronAPI;
+
+  const handleDragStart = (e, index) => {
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", String(index)); } catch {}
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverIndex !== index) setDragOverIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = async (e, targetIndex) => {
+    e.preventDefault();
+    const src = dragIndex;
+    setDragIndex(null);
+    setDragOverIndex(null);
+    if (src === null || src === targetIndex) return;
+
+    // Compute new sorted array
+    const arr = [...games];
+    const [moved] = arr.splice(src, 1);
+    arr.splice(targetIndex, 0, moved);
+
+    // Persist new order for every game whose position changed
+    try {
+      await Promise.all(
+        arr.map((g, i) => {
+          if ((g.order ?? -1) !== i) {
+            return axios.put(`${API}/games/${g.id}`, { order: i });
+          }
+          return Promise.resolve();
+        })
+      );
+      onGamesChange();
+    } catch (err) {
+      const detail = err?.response?.data?.detail || err?.message || "未知錯誤";
+      toast.error("排序失敗: " + detail);
+    }
+  };
 
   const handleBrowseFile = async () => {
     if (!isElectron) {
@@ -445,10 +493,28 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                   <p className="text-xs mt-1">點擊上方按鈕新增</p>
                 </div>
               ) : (
-                games.map((game) => (
-                  <div key={game.id} className="group p-3 rounded-md bg-[#0A0A0A] border border-[#262626] hover:border-[#404040] transition-colors" data-testid={`game-item-${game.id}`}>
+                games.map((game, index) => (
+                  <div
+                    key={game.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDrop={(e) => handleDrop(e, index)}
+                    onDragEnd={handleDragEnd}
+                    className={`group p-3 rounded-md bg-[#0A0A0A] border transition-all ${
+                      dragIndex === index
+                        ? "border-[#00F0FF] opacity-50"
+                        : dragOverIndex === index
+                          ? "border-[#00F0FF] scale-[1.02]"
+                          : "border-[#262626] hover:border-[#404040]"
+                    }`}
+                    data-testid={`game-item-${game.id}`}
+                  >
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <h3 className="text-sm font-medium text-white truncate flex-1">{game.name}</h3>
+                      <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                        <GripVertical className="w-4 h-4 mt-0.5 text-neutral-600 cursor-grab active:cursor-grabbing shrink-0" data-testid={`drag-handle-${game.id}`} />
+                        <h3 className="text-sm font-medium text-white truncate flex-1">{game.name}</h3>
+                      </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => launchGame(game.path, game.name, proto)} className="p-1 rounded hover:bg-[#262626] text-[#39FF14]" title="啟動" data-testid={`launch-game-${game.id}`}><Rocket className="w-3 h-3" /></button>
                         <button onClick={() => copyGamePath(game.path, game.name)} className="p-1 rounded hover:bg-[#262626] text-[#00F0FF]" title="複製路徑" data-testid={`copy-path-${game.id}`}><Copy className="w-3 h-3" /></button>
@@ -456,7 +522,7 @@ function Sidebar({ games, onGamesChange, isOpen, onToggle, settings }) {
                         <button onClick={() => handleDelete(game.id)} className="p-1 rounded hover:bg-[#262626] text-[#FF3B30]" title="刪除" data-testid={`delete-game-${game.id}`}><Trash2 className="w-3 h-3" /></button>
                       </div>
                     </div>
-                    <div className="text-xs text-neutral-500 space-y-0.5">
+                    <div className="text-xs text-neutral-500 space-y-0.5 pl-5">
                       <div>日 {(game.tasks || []).length} / 週 {(game.weekly_tasks || []).length} / 月 {(game.monthly_tasks || []).length} / 版 {(game.version_tasks || []).length}</div>
                     </div>
                   </div>
